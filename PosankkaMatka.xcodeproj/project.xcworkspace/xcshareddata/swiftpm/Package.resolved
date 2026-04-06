@@ -1,0 +1,15 @@
+{
+  "originHash" : "9d8c4b1760ea3758f3d5d73eb93ab273c45643b2eee0ab19edec4e597215e9a2",
+  "pins" : [
+    {
+      "identity" : "folibusapi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/serotonincrash/FoliBusAPI",
+      "state" : {
+        "branch" : "main",
+        "revision" : "56b9d6a7a2e1b374ff8a7fff3afe4e85a58275e3"
+      }
+    }
+  ],
+  "version" : 3
+}
