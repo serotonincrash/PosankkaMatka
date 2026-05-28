@@ -8,7 +8,8 @@
 import SwiftUI
 import FoliBusAPI
 struct StopView: View {
-    var stopId: String
+    @Namespace var namespace
+    var stopWithDistance: StopWithDistance
     @FoliService var foli
     @State var arrivalState: ResourceState<[Foli.Arrival]> = .loading
     
@@ -22,16 +23,19 @@ struct StopView: View {
                     if arrivals.count == 0 {
                         ContentUnavailableView("No Arrivals", systemImage: "pc")
                     } else {
-                        List(arrivals) { arrival in
-                            HStack {
-                                Text(arrival.lineRef)
-                                    .monospaced()
-                                Text(arrival.destinationDisplay)
-                                Spacer()
-                                Text(arrival.expectedDepartureDate.formatted(.iso8601))
-                            }
-                            .refreshable {
-                                await refreshStop()
+                        List {
+                            Section("Arrivals") {
+                                ForEach(arrivals) { arrival in
+                                    HStack {
+                                        Text(arrival.lineRef)
+                                            .monospaced()
+                                        Text(arrival.destinationDisplay)
+                                        Spacer()
+                                        Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
+                                            .font(.footnote)
+                                    }
+                                }
+                                
                             }
                         }
                     }
@@ -40,21 +44,21 @@ struct StopView: View {
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))}
         }
+        .refreshable {
+            await refreshStop()
+        }
         .task {
             await refreshStop()
         }
+        .navigationTitle(Text(stopWithDistance.stop.name))
         
     }
     func refreshStop() async {
         do {
-            let arrivalData = try await foli.fetchArrivals(for: stopId)
+            let arrivalData = try await foli.fetchArrivals(for: stopWithDistance.stop.id)
             arrivalState = .success(arrivalData)
         } catch {
             arrivalState = .failure(error as? Foli.APIError ?? .networkError(error))
         }
     }
-}
-
-#Preview {
-    StopView(stopId: "4")
 }

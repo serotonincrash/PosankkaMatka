@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D158E6382F833CE700DF70CE /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D158E6372F833CE700DF70CE /* FoliBusAPI */; };
+		D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1C5F4F12FC8A5D200B262FA /* Forever */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */,
 				D158E6382F833CE700DF70CE /* FoliBusAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -118,6 +120,7 @@
 			name = PosankkaMatka;
 			packageProductDependencies = (
 				D158E6372F833CE700DF70CE /* FoliBusAPI */,
+				D1C5F4F12FC8A5D200B262FA /* Forever */,
 			);
 			productName = PosankkaMatka;
 			productReference = D158E60C2F833CA400DF70CE /* PosankkaMatka.app */;
@@ -203,6 +206,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
+				D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D158E60D2F833CA400DF70CE /* Products */;
@@ -409,6 +413,8 @@
 				DEVELOPMENT_TEAM = 3N9YQ5B6KM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "PosankkaMatka uses your location to detect stops near you.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "PosankkaMatka uses your location to detect stops near you.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -441,6 +447,8 @@
 				DEVELOPMENT_TEAM = 3N9YQ5B6KM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "PosankkaMatka uses your location to detect stops near you.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "PosankkaMatka uses your location to detect stops near you.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -597,6 +605,14 @@
 				kind = branch;
 			};
 		};
+		D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jiachenyee/Forever";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -604,6 +620,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
 			productName = FoliBusAPI;
+		};
+		D1C5F4F12FC8A5D200B262FA /* Forever */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */;
+			productName = Forever;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

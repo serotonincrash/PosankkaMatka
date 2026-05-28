@@ -1,5 +1,5 @@
 {
-  "originHash" : "9d8c4b1760ea3758f3d5d73eb93ab273c45643b2eee0ab19edec4e597215e9a2",
+  "originHash" : "cf9c850d9b0f4c8fc764422a805a144c4b8408b64ff03a96bbb78b7839f1fdb2",
   "pins" : [
     {
       "identity" : "folibusapi",
@@ -8,6 +8,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "56b9d6a7a2e1b374ff8a7fff3afe4e85a58275e3"
+      }
+    },
+    {
+      "identity" : "forever",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jiachenyee/Forever",
+      "state" : {
+        "revision" : "90274e87842722d9b79e61431cbbef1c418944b6",
+        "version" : "1.1.0"
       }
     }
   ],
