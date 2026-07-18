@@ -7,7 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D158E6382F833CE700DF70CE /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D158E6372F833CE700DF70CE /* FoliBusAPI */; };
+		D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB3393007B6F200F86DBB /* FoliBusAPI */; };
+		D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB33B3007B6F200F86DBB /* FoliBusUI */; };
 		D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1C5F4F12FC8A5D200B262FA /* Forever */; };
 /* End PBXBuildFile section */
 
@@ -57,8 +58,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */,
+				D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */,
 				D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */,
-				D158E6382F833CE700DF70CE /* FoliBusAPI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,8 +121,9 @@
 			);
 			name = PosankkaMatka;
 			packageProductDependencies = (
-				D158E6372F833CE700DF70CE /* FoliBusAPI */,
 				D1C5F4F12FC8A5D200B262FA /* Forever */,
+				D13DB3393007B6F200F86DBB /* FoliBusAPI */,
+				D13DB33B3007B6F200F86DBB /* FoliBusUI */,
 			);
 			productName = PosankkaMatka;
 			productReference = D158E60C2F833CA400DF70CE /* PosankkaMatka.app */;
@@ -205,8 +208,8 @@
 			mainGroup = D158E6032F833CA400DF70CE;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
 				D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */,
+				D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D158E60D2F833CA400DF70CE /* Products */;
@@ -597,12 +600,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */ = {
+		D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/serotonincrash/FoliBusAPI";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
 			};
 		};
 		D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */ = {
@@ -616,10 +619,15 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D158E6372F833CE700DF70CE /* FoliBusAPI */ = {
+		D13DB3393007B6F200F86DBB /* FoliBusAPI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
+			package = D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
 			productName = FoliBusAPI;
+		};
+		D13DB33B3007B6F200F86DBB /* FoliBusUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
+			productName = FoliBusUI;
 		};
 		D1C5F4F12FC8A5D200B262FA /* Forever */ = {
 			isa = XCSwiftPackageProductDependency;
