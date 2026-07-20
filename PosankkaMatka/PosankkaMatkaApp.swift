@@ -16,10 +16,11 @@ struct PosankkaMatkaApp: App {
             HomeView()
                 .environment(
                     \.foliClientProvider,
+                     
                     DefaultFoliClientProvider(
                         configuration: FoliClientConfiguration(
                             cacheBehavior: .cachedOrFetch,
-                            cacheTimeout: .default
+                            cacheTTL: .default
                         )
                     )
                 )

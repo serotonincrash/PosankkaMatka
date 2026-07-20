@@ -56,7 +56,9 @@ struct StopView: View {
     func refreshStop() async {
         do {
             let arrivalData = try await foli.fetchArrivals(for: stopWithDistance.stop.id)
-            arrivalState = .success(arrivalData)
+            withAnimation(.spring(.bouncy)) {
+                arrivalState = .success(arrivalData)
+            }
         } catch {
             arrivalState = .failure(error as? Foli.APIError ?? .networkError(error))
         }

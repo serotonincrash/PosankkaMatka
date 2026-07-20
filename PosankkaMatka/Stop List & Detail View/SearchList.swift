@@ -15,28 +15,26 @@ struct SearchList: View {
     
     @Environment(\.isSearching) var isSearching
     @Environment(LocationManager.self) var locationManager
+    
     @Binding var search: String
-    @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
     @State var stops: [Foli.Stop]
+    @Binding var searchFilter: SortState
     var body: some View {
         if !isSearching {
+            let filteredStops = filter(stops)
+            
             VStack {
-                let filteredStops = filter(stops)
-                
                 if filteredStops.isEmpty {
-                    ContentUnavailableView("No Stops", systemImage: "questionmark", description: Text("There are no stops nearby."))
+                    ContentUnavailableView("No Stops", systemImage: "questionmark", description: Text(searchFilter == .none ? "There are no stops available." : "There are no stops matching the given criteria."))
                 } else {
                     List(filteredStops) { stopWithDistance in
-                        let stop = stopWithDistance.stop
                         NavigationLink {
                             StopView(stopWithDistance: stopWithDistance)
-//                                .navigationTransition(.zoom(sourceID: stop.id + stop.name, in: namespace))
                         } label: {
                             HStack {
-                                Text(stop.id)
+                                Text(stopWithDistance.stop.id)
                                     .monospaced()
-                                Text(stop.name)
-//                                    .matchedTransitionSource(id: stop.id + stop.name, in: namespace)
+                                Text(stopWithDistance.stop.name)
                                 Spacer()
                                 Group {
                                     if let distance = stopWithDistance.distance {
@@ -54,7 +52,7 @@ struct SearchList: View {
             .toolbar {
                 Menu {
                     Button {
-                            searchFilter = .none
+                        searchFilter = .none
                     } label: {
                         if searchFilter == .none {
                             Image(systemName: "checkmark")
@@ -105,6 +103,7 @@ struct SearchList: View {
                                     StopView(stopWithDistance: .init(stop))
 //                                        .navigationTransition(.zoom(sourceID: stop.id + stop.name, in: namespace))
                                 } label: {
+                                    #warning("TODO turn this into a cell showing the routes too?")
                                     HStack {
                                         Text(stop.id)
                                             .monospaced()

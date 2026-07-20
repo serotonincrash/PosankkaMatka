@@ -9,25 +9,28 @@ import SwiftUI
 import FoliBusUI
 import CoreLocation
 import CoreLocationUI
+import Forever
+
 struct ListStopsView: View {
     @FoliService var foli
     @State var search = ""
     @State var stopState: ResourceState<[Foli.Stop]> = .loading
-    
+    @Environment(LocationManager.self) var locationManager
+    @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
     @Environment(\.isSearching) var isSearching: Bool
     var body: some View {
         NavigationStack {
-                switch (stopState) {
-                case .loading:
-                    ProgressView()
-                case .success(let stops):
-                    SearchList(search: $search, stops: stops)
-                        .searchable(text: $search, prompt: Text("Search by name or code"))
-                case .failure(let error):
-                    ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))
-                }
+            switch (stopState) {
+            case .loading:
+                ProgressView()
+            case .success(let stops):
+                SearchList(search: $search, stops: stops, searchFilter: $searchFilter)
+                    .searchable(text: $search, prompt: Text("Search by name or code"))
+            case .failure(let error):
+                ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))
+            }
         }
-
+        
         .task {
             do {
                 let stopData = try await foli.fetchStops()
