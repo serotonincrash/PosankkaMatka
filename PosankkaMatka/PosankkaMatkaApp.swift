@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import FoliBusAPI
+import FoliBusUI
 
 @main
 struct PosankkaMatkaApp: App {

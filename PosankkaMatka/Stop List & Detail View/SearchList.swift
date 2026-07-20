@@ -7,7 +7,7 @@
 
 import SwiftUI
 import CoreLocation
-import FoliBusAPI
+import FoliBusUI
 import Forever
 
 struct SearchList: View {

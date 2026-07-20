@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import FoliBusAPI
+import FoliBusUI
 
 enum ResourceState<T> {
     case loading

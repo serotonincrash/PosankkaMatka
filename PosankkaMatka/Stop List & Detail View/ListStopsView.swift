@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import FoliBusAPI
+import FoliBusUI
 import CoreLocation
 import CoreLocationUI
 struct ListStopsView: View {
@@ -37,14 +37,6 @@ struct ListStopsView: View {
             }
         }
         
-    }
-    
-    enum SortState: Hashable {
-        /// Filter stops out based on proximity in meters
-        case proximity(Double)
-        
-        /// Show all stops
-        case none
     }
     
 }

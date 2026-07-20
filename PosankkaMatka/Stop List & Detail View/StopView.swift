@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import FoliBusAPI
+import FoliBusUI
 struct StopView: View {
     @Namespace var namespace
     var stopWithDistance: StopWithDistance
