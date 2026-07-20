@@ -7,7 +7,7 @@
 
 import FoliBusAPI
 
-struct StopWithDistance: Identifiable {
+struct StopWithDistance: Identifiable, Hashable {
     var id: String { stop.id }
     /// The stop this type encapsulates.
     var stop: Foli.Stop
