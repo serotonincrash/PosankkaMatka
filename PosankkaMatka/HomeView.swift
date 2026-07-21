@@ -18,6 +18,10 @@ struct HomeView: View {
     /// shows none until the user zooms in. A stop is simply in-view-and-zoomed-in
     /// or not — no per-pan ranking, so markers don't churn while panning.
     private static let markerThreshold: CLLocationDegrees = 0.06
+    /// Span the camera snaps to when selecting a stop while zoomed out past the
+    /// marker threshold — street level, showing the stop and its immediate
+    /// surrounding streets/nearby stops.
+    private static let selectionSpan = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
 
     @State private var locationManager = LocationManager()
     @State private var stopsStore = ResourceStore<[Foli.Stop]>()
@@ -106,7 +110,12 @@ struct HomeView: View {
     private var mapContent: some MapContent {
         ForEach(displayedStops) { stop in
             if let coordinate = stop.location?.toCLCoordinate() {
-                Marker(stop.name, coordinate: coordinate)
+                // System Marker keeps MapKit's label decluttering (a compact
+                // bus glyph when dense) and shows the stop name when selected.
+                // TODO: Finnish bus stops use distinctive real-world signage;
+                // explore representing that here (e.g. a custom Annotation with
+                // a Föli-style sign glyph) instead of the generic bus icon.
+                Marker(stop.name, systemImage: "bus.fill", coordinate: coordinate)
                     .tag(stop.id)
             }
         }
@@ -125,7 +134,11 @@ struct HomeView: View {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
-        let span = visibleRegion?.span ?? Self.defaultSpan
+        // Preserve a deliberate close zoom (already within the marker threshold),
+        // but snap to a fixed level when zoomed out — otherwise recentering at a
+        // wide span leaves the selected stop with no visible markers.
+        let currentSpan = visibleRegion?.span ?? Self.defaultSpan
+        let span = currentSpan.latitudeDelta <= Self.markerThreshold ? currentSpan : Self.selectionSpan
         // Shift the center south by a quarter-span so the stop sits above the
         // (roughly half-screen) sheet when it's expanded.
         let center = CLLocationCoordinate2D(
