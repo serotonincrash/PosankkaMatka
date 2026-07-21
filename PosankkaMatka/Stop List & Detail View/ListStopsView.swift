@@ -8,40 +8,39 @@
 import SwiftUI
 import FoliBusUI
 import CoreLocation
-import CoreLocationUI
 import Forever
 
+/// Hosts the combined home-sheet list (nearby stops + routes) with search and the
+/// distance filter. Reads both resource stores from the environment; it has no
+/// NavigationStack of its own — HomeView owns the stack and destinations.
 struct ListStopsView: View {
     @State var search = ""
     @Environment(ResourceStore<[Foli.Stop]>.self) private var stopsStore
+    @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @Environment(LocationManager.self) var locationManager
-    @Forever("nearbySearchFilter") var searchFilter: SearchList.SortState = .proximity(2000)
-    @Environment(\.isSearching) var isSearching: Bool
+    @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
 
-    /// Selecting a stop from the list drives the same selection the map uses, so
-    /// the map recenters/highlights and navigation happens on the shared stack.
     @Binding var selectedStopID: Foli.Stop.ID?
+    @Binding var selectedRoute: Foli.Route?
 
     var body: some View {
-        // No NavigationStack here: this view lives inside HomeView's stack, which
-        // owns the `navigationDestination`. A nested stack would trap pushes.
         Group {
-            switch (stopsStore.state) {
+            switch stopsStore.state {
             case .loading:
                 ProgressView()
             case .success(let stops):
-                SearchList(search: $search, stops: stops, searchFilter: $searchFilter, selectedStopID: $selectedStopID)
-                    .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search by name or code"))
+                HomeSheetList(
+                    search: $search,
+                    stops: stops,
+                    routes: routesStore.state.value ?? [],
+                    searchFilter: $searchFilter,
+                    selectedStopID: $selectedStopID,
+                    selectedRoute: $selectedRoute
+                )
+                .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search stops or routes"))
             case .failure(let error):
-                ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))
+                ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error.localizedDescription))
             }
         }
     }
-
-}
-
-#Preview {
-    ListStopsView(selectedStopID: .constant(nil))
-        .environment(ResourceStore<[Foli.Stop]>())
-        .environment(LocationManager())
 }

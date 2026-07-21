@@ -25,6 +25,7 @@ struct HomeView: View {
 
     @State private var locationManager = LocationManager()
     @State private var stopsStore = ResourceStore<[Foli.Stop]>()
+    @State private var routesStore = ResourceStore<[Foli.Route]>()
     @FoliService var foli
 
     @State private var camera: MapCameraPosition = .automatic
@@ -42,57 +43,65 @@ struct HomeView: View {
     @State private var selectedDetent: PresentationDetent = .medium
 
     @State private var stop: StopWithDistance?
+    @State private var selectedRoute: Foli.Route?
+    /// One coordinate path per shape variant of the selected route; empty when no
+    /// route is selected. Drawn as polylines over the stop markers.
+    @State private var routeShapes: [[CLLocationCoordinate2D]] = []
 
     var body: some View {
-        TabView {
-            Tab("Stops", systemImage: "house.and.flag") {
-                Map(position: $camera, selection: $selectedStopID) {
-                    UserAnnotation()
-                    mapContent
-                }
-                .onMapCameraChange(frequency: .onEnd) { context in
-                    visibleRegion = context.region
-                    updateDisplayedStops(for: context.region)
-                }
-                .onChange(of: selectedStopID) { _, newValue in
-                    handleSelection(newValue)
-                }
-                .onChange(of: stop) { _, newStop in
-                    // Returned to the list: drop the marker highlight so the same
-                    // stop is re-tappable.
-                    if newStop == nil { selectedStopID = nil }
-                }
-                .sheet(isPresented: .constant(true)) {
-                    NavigationStack {
-                        ListStopsView(selectedStopID: $selectedStopID)
-                            // No `.large` detent: at full coverage iOS dims the
-                            // presenter regardless of the undimmed boundary, and that
-                            // dim layer hitches the live Map. Capping at `.medium`
-                            // avoids it; the list is fully usable at that height.
-                            // Background interaction stays enabled (keeps the map
-                            // tappable and undimmed) at both remaining detents.
-                            .presentationDetents([.height(110), .medium], selection: $selectedDetent)
-                            .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                            .interactiveDismissDisabled()
-                        .navigationDestination(item: $stop) { stop in
-                            StopView(stopWithDistance: stop)
-                                // New stop id → fresh StopView identity → its
-                                // @State store resets and re-fetches arrivals,
-                                // rather than reusing the previous stop's data.
-                                .id(stop.id)
-                        }
+        // Single screen: map + one persistent sheet holding stops and routes.
+        Map(position: $camera, selection: $selectedStopID) {
+            UserAnnotation()
+            mapContent
+        }
+        .onMapCameraChange(frequency: .onEnd) { context in
+            visibleRegion = context.region
+            updateDisplayedStops(for: context.region)
+        }
+        .onChange(of: selectedStopID) { _, newValue in
+            handleStopSelection(newValue)
+        }
+        .onChange(of: stop) { _, newStop in
+            // Returned to the list: drop the marker highlight so the same
+            // stop is re-tappable.
+            if newStop == nil { selectedStopID = nil }
+        }
+        .onChange(of: selectedRoute) { _, newRoute in
+            handleRouteSelection(newRoute)
+        }
+        .sheet(isPresented: .constant(true)) {
+            NavigationStack {
+                ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
+                    // No `.large` detent: at full coverage iOS dims the
+                    // presenter regardless of the undimmed boundary, and that
+                    // dim layer hitches the live Map. Capping at `.medium`
+                    // avoids it; the list is fully usable at that height.
+                    // Background interaction stays enabled (keeps the map
+                    // tappable and undimmed) at both remaining detents.
+                    .presentationDetents([.height(110), .medium], selection: $selectedDetent)
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .interactiveDismissDisabled()
+                    .navigationDestination(item: $stop) { stop in
+                        StopView(stopWithDistance: stop)
+                            // New stop id → fresh StopView identity → its
+                            // @State store resets and re-fetches arrivals,
+                            // rather than reusing the previous stop's data.
+                            .id(stop.id)
                     }
-                }
-            }
-            Tab("Routes", systemImage: "map") {
-                RouteView()
+                    .navigationDestination(item: $selectedRoute) { route in
+                        RouteDetailList(route: route, selectedStopID: $selectedStopID)
+                            .id(route.id)
+                    }
             }
         }
         .environment(locationManager)
         .environment(stopsStore)
+        .environment(routesStore)
         .task {
             let foli = foli
-            await stopsStore.load { try await foli.fetchStops() }
+            async let stops: Void = stopsStore.load { try await foli.fetchStops() }
+            async let routes: Void = routesStore.load { try await foli.fetchRoutes() }
+            _ = await (stops, routes)
             await centerOnUser()
         }
     }
@@ -108,6 +117,12 @@ struct HomeView: View {
     /// change reuses the same array (stable identities → no marker rebuild).
     @MapContentBuilder
     private var mapContent: some MapContent {
+        // Selected route's path(s), drawn beneath the markers in the route color.
+        ForEach(Array(routeShapes.enumerated()), id: \.offset) { _, path in
+            MapPolyline(coordinates: path)
+                .stroke(selectedRoute?.color ?? .accentColor,
+                        style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        }
         ForEach(displayedStops) { stop in
             if let coordinate = stop.location?.toCLCoordinate() {
                 // System Marker keeps MapKit's label decluttering (a compact
@@ -130,7 +145,7 @@ struct HomeView: View {
     /// map carries no sheet inset (that caused a detent hitch), so we offset only
     /// here, once. `selectedStopID` is *not* cleared here (that would drop the
     /// highlight); it's cleared in `onChange(of: stop)` when the user returns.
-    private func handleSelection(_ newValue: Foli.Stop.ID?) {
+    private func handleStopSelection(_ newValue: Foli.Stop.ID?) {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
@@ -154,6 +169,40 @@ struct HomeView: View {
             selectedDetent = .medium
         }
         stop = StopWithDistance(found)
+    }
+
+    /// Selecting a route draws its line(s) on the shared map and raises the sheet;
+    /// deselecting (route detail popped) clears the overlay.
+    private func handleRouteSelection(_ route: Foli.Route?) {
+        guard let route else {
+            routeShapes = []
+            return
+        }
+        withAnimation { selectedDetent = .medium }
+        let foli = foli
+        Task {
+            let shapes = (try? await fetchRouteShapes(route.id, using: foli)) ?? []
+            routeShapes = shapes
+            if let region = MKCoordinateRegion(enclosing: shapes.flatMap { $0 }) {
+                withAnimation { camera = .region(region) }
+            }
+        }
+    }
+
+    /// route → shape variant paths, fetched in parallel (all cached).
+    private func fetchRouteShapes(_ routeId: String, using foli: FoliService) async throws -> [[CLLocationCoordinate2D]] {
+        let shapeIds = try await foli.fetchShapeIds(forRoute: routeId)
+        return try await withThrowingTaskGroup(of: [CLLocationCoordinate2D].self) { group in
+            for shapeId in shapeIds {
+                group.addTask {
+                    let points = try await foli.fetchShapePoints(forShape: shapeId)
+                    return points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+                }
+            }
+            var paths: [[CLLocationCoordinate2D]] = []
+            for try await path in group where !path.isEmpty { paths.append(path) }
+            return paths
+        }
     }
 
     // MARK: - Helpers
@@ -214,6 +263,24 @@ struct HomeView: View {
 }
 
 private extension MKCoordinateRegion {
+    /// A region enclosing all coordinates with padding, or nil if empty. Used to
+    /// frame a selected route's polyline.
+    init?(enclosing coordinates: [CLLocationCoordinate2D]) {
+        guard let first = coordinates.first else { return nil }
+        var minLat = first.latitude, maxLat = first.latitude
+        var minLon = first.longitude, maxLon = first.longitude
+        for c in coordinates {
+            minLat = min(minLat, c.latitude); maxLat = max(maxLat, c.latitude)
+            minLon = min(minLon, c.longitude); maxLon = max(maxLon, c.longitude)
+        }
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.3, 0.005),
+            longitudeDelta: max((maxLon - minLon) * 1.3, 0.005)
+        )
+        self.init(center: center, span: span)
+    }
+
     /// Whether two regions are close enough to treat as the same view — used to
     /// skip marker recomputes triggered by inset changes rather than real pans.
     /// Epsilon is a fraction of the current span, so it scales with zoom.

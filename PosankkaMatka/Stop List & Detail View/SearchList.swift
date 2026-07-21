@@ -10,153 +10,153 @@ import CoreLocation
 import FoliBusUI
 import Forever
 
-struct SearchList: View {
-    @Namespace var namespace
-    
+/// The combined home-sheet list: "Nearby Stops" and "Routes" in one map-backed
+/// sheet (à la Maps). Both idle and search states render sections for each type;
+/// tapping a stop or a route sets the shared selection the map reacts to.
+struct HomeSheetList: View {
     @Environment(\.isSearching) var isSearching
     @Environment(LocationManager.self) var locationManager
-    
-    @Binding var search: String
-    @State var stops: [Foli.Stop]
-    @Binding var searchFilter: SortState
-    /// Shared with the map: setting this recenters/highlights the stop and
-    /// triggers navigation to `StopView` on HomeView's stack.
-    @Binding var selectedStopID: Foli.Stop.ID?
-    var body: some View {
-        if !isSearching {
-            let filteredStops = filter(stops)
-            
-            VStack {
-                if filteredStops.isEmpty {
-                    ContentUnavailableView("No Stops", systemImage: "questionmark", description: Text(searchFilter == .none ? "There are no stops available." : "There are no stops matching the given criteria."))
-                } else {
-                    List(filteredStops) { stopWithDistance in
-                        Button {
-                            selectedStopID = stopWithDistance.stop.id
-                        } label: {
-                            HStack {
-                                Text(stopWithDistance.stop.id)
-                                    .monospaced()
-                                Text(stopWithDistance.stop.name)
-                                Spacer()
-                                Group {
-                                    if let distance = stopWithDistance.distance {
-                                        Text(distance < 1000 ? "\(Int(distance)) m" : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km")
-                                            .font(.subheadline)
-                                    }
-                                }
 
-                            }
-                        }
-                        .tint(.primary)
-                    }
-                }
-            }
-            .navigationTitle(Text("Nearby"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Menu {
-                    Button {
-                        searchFilter = .none
-                    } label: {
-                        if searchFilter == .none {
-                            Image(systemName: "checkmark")
-                                .imageScale(.small)
-                        }
-                        Label("None", systemImage: "location.slash")
-                    }
-                    
-                    Section("Distance") {
-                        Picker(selection: $searchFilter) {
-                            
-                            Text("500 m")
-                                .tag(SortState.proximity(500))
-                            Text("1 km")
-                                .tag(SortState.proximity(1000))
-                            Text("2 km")
-                                .tag(SortState.proximity(2000))
-                            
-                        } label: {
-                            Label("Filter by Proximity", systemImage: "location")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "location")
-                }
-                
-            }
-        } else {
-            Group {
-                if !search.isEmpty {
-                    let filteredStops = stops.filter({ stop in
-                        stop.name.lowercased().contains(search.lowercased()) || (stop.code ?? "").lowercased().contains(search.lowercased())
-                    })
-                    if filteredStops.isEmpty {
-                        ContentUnavailableView {
-                            Label("No Stops", systemImage: "questionmark")
-                        } description: {
-                            Text("No stops matching the given criteria were found.")
-                        } actions: {
-                            Button("All Stops") {
-                                self.searchFilter = .none
-                            }
-                        }
-                    } else {
-                        VStack {
-                            List(filteredStops) { stop in
-                                Button {
-                                    selectedStopID = stop.id
-                                } label: {
-                                    #warning("TODO turn this into a cell showing the routes too?")
+    @Binding var search: String
+    let stops: [Foli.Stop]
+    let routes: [Foli.Route]
+    @Binding var searchFilter: SortState
+    @Binding var selectedStopID: Foli.Stop.ID?
+    @Binding var selectedRoute: Foli.Route?
+
+    var body: some View {
+        let stopRows = isSearching ? searchedStops() : filter(stops)
+        let routeRows = filteredRoutes()
+
+        Group {
+            if stopRows.isEmpty && routeRows.isEmpty {
+                emptyState
+            } else {
+                List {
+                    if !stopRows.isEmpty {
+                        Section(isSearching ? "Stops" : "Nearby Stops") {
+                            ForEach(stopRows) { stopWithDistance in
+                                Button { selectedStopID = stopWithDistance.stop.id } label: {
                                     HStack {
-                                        Text(stop.id)
-                                            .monospaced()
-                                        Text(stop.name)
+                                        Image(systemName: "signpost.right.fill")
+                                            .foregroundStyle(.secondary)
+                                            .imageScale(.small)
+                                        Text(stopWithDistance.stop.id).monospaced()
+                                        Text(stopWithDistance.stop.name)
+                                        Spacer()
+                                        if let distance = stopWithDistance.distance {
+                                            Text(distance < 1000 ? "\(Int(distance)) m" : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                 }
                                 .tint(.primary)
                             }
                         }
                     }
-                } else {
-                    ContentUnavailableView("Start typing!", systemImage: "magnifyingglass", description: Text("Type a stop name or code to start searching."))
+                    if !routeRows.isEmpty {
+                        Section("Routes") {
+                            ForEach(routeRows) { route in
+                                Button { selectedRoute = route } label: {
+                                    HStack(spacing: 12) {
+                                        RouteBadge(route: route)
+                                        Text(route.longName)
+                                        Spacer()
+                                    }
+                                }
+                                .tint(.primary)
+                            }
+                        }
+                    }
                 }
             }
         }
+        .navigationTitle(Text("Föli"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Menu {
+                Button {
+                    searchFilter = .none
+                } label: {
+                    if searchFilter == .none {
+                        Image(systemName: "checkmark").imageScale(.small)
+                    }
+                    Label("None", systemImage: "location.slash")
+                }
+                Section("Distance") {
+                    Picker(selection: $searchFilter) {
+                        Text("500 m").tag(SortState.proximity(500))
+                        Text("1 km").tag(SortState.proximity(1000))
+                        Text("2 km").tag(SortState.proximity(2000))
+                    } label: {
+                        Label("Filter by Proximity", systemImage: "location")
+                    }
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+            }
+        }
     }
-    
+
+    // MARK: - Empty state
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if isSearching && search.isEmpty {
+            ContentUnavailableView("Start typing", systemImage: "magnifyingglass", description: Text("Search for a stop or route by name or number."))
+        } else if isSearching {
+            ContentUnavailableView.search(text: search)
+        } else {
+            ContentUnavailableView("Nothing to show", systemImage: "bus", description: Text("No stops or routes are available."))
+        }
+    }
+
+    // MARK: - Filtering
+
+    /// Routes filtered by the current search (number or name), numeric-sorted.
+    private func filteredRoutes() -> [Foli.Route] {
+        let sorted = routes.sortedByLine()
+        guard isSearching, !search.isEmpty else { return isSearching ? [] : sorted }
+        return sorted.filter {
+            $0.shortName.localizedCaseInsensitiveContains(search)
+                || $0.longName.localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    /// Stops matching the search text (name or code).
+    private func searchedStops() -> [StopWithDistance] {
+        guard !search.isEmpty else { return [] }
+        let matches = stops.filter {
+            $0.name.localizedCaseInsensitiveContains(search)
+                || ($0.code ?? "").localizedCaseInsensitiveContains(search)
+        }
+        return matches.map { StopWithDistance($0) }
+    }
+
+    /// Nearby stops (idle state): distance-filtered and sorted per `searchFilter`.
     func filter(_ stops: [Foli.Stop]) -> [StopWithDistance] {
-        var sortedStops = stops.sorted(by: { s1, s2 in
-            Int(s1.id)! < Int(s2.id)!
-        })
-        
+        var sortedStops = stops.sorted { s1, s2 in
+            (Int(s1.id) ?? 0) < (Int(s2.id) ?? 0)
+        }
+
         if locationManager.checkLocationAuthorization() {
-            guard let location = locationManager.currentLocation, let currCLLocation = CLLocation(location) else { return sortedStops.map { .init($0) } }
-            
+            guard let location = locationManager.currentLocation, let currCLLocation = CLLocation(location) else {
+                return sortedStops.map { .init($0) }
+            }
             if case .proximity(let distance) = searchFilter, distance > 0 {
                 sortedStops = sortedStops.filter(byDistance: distance, from: currCLLocation)
             }
-            
             sortedStops = sortedStops.sortedByDistance(to: currCLLocation)
             return sortedStops.map {
                 if let stopLocation = $0.location, let stopCoord = CLLocation(stopLocation.toCLCoordinate()) {
                     StopWithDistance($0, distance: currCLLocation.distance(from: stopCoord))
                 } else {
-                    // invalid stop location?
                     StopWithDistance($0)
                 }
             }
         } else {
-            
             return sortedStops.map { StopWithDistance($0) }
         }
-    }
-    
-    enum SortState: Hashable, Codable {
-        /// Filter stops out based on proximity in meters
-        case proximity(Double)
-        
-        /// Show all stops
-        case none
     }
 }
