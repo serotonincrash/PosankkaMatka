@@ -14,6 +14,11 @@ import Forever
 /// sheet (à la Maps). Both idle and search states render sections for each type;
 /// tapping a stop or a route sets the shared selection the map reacts to.
 struct HomeSheetList: View {
+    /// Max rows in the idle "Nearby Stops" section — the nearest this-many. The
+    /// distance filter still applies; this bounds the row count so the list stays
+    /// scannable rather than showing the whole network.
+    private static let nearbyLimit = 25
+
     @Environment(\.isSearching) var isSearching
     @Environment(LocationManager.self) var locationManager
 
@@ -25,7 +30,8 @@ struct HomeSheetList: View {
     @Binding var selectedRoute: Foli.Route?
 
     var body: some View {
-        let stopRows = isSearching ? searchedStops() : filter(stops)
+        // Idle: cap to the nearest `nearbyLimit`. Search results stay unbounded.
+        let stopRows = isSearching ? searchedStops() : Array(filter(stops).prefix(Self.nearbyLimit))
         let routeRows = filteredRoutes()
 
         Group {
