@@ -8,73 +8,66 @@
 import SwiftUI
 import FoliBusUI
 
-/// The pushed detail for a selected route: its stops grouped into a section per
-/// direction (titled by headsign). The route's line is drawn on the shared home
-/// map by `HomeView`, so this detail is list-only. Tapping a stop opens it.
+/// The pushed detail for a selected route: a direction Picker pinned above the
+/// stops of the currently selected direction. The route's line and start/end
+/// pins are drawn on the shared home map by `HomeView`; the shared
+/// `RouteDetailStore` (loaded by HomeView) is the single source of truth, so the
+/// Picker drives the map and this list together. Tapping a stop opens it.
 struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
-    @FoliService var foli
-
-    @State private var directionsStore = ResourceStore<[RouteDirection]>()
+    @Environment(RouteDetailStore.self) private var routeDetail
 
     var body: some View {
-        Group {
-            switch directionsStore.state {
-            case .loading:
-                ProgressView()
-            case .success(let directions):
-                List {
-                    ForEach(directions) { direction in
-                        Section(direction.headsign) {
-                            ForEach(direction.stops) { stop in
-                                Button {
-                                    selectedStopID = stop.id
-                                } label: {
-                                    HStack {
-                                        Text(stop.id).monospaced()
-                                        Text(stop.name)
-                                        Spacer()
-                                    }
-                                }
-                                .tint(.primary)
-                            }
-                        }
+        @Bindable var routeDetail = routeDetail
+
+        VStack(spacing: 0) {
+            // Pinned above the list so it stays visible while the stops scroll.
+            if routeDetail.allDirections.count > 1 {
+                Picker("Direction", selection: $routeDetail.selectedDirectionId) {
+                    ForEach(routeDetail.allDirections) { direction in
+                        Text(direction.headsign).tag(Optional(direction.id))
                     }
                 }
-            case .failure(let error):
-                ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error.localizedDescription))
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
             }
+
+            content
         }
         .navigationTitle(route.fullDisplayName)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await directionsStore.load(directionsFetch)
-        }
     }
 
-    private var directionsFetch: @Sendable () async throws -> [RouteDirection] {
-        let foli = foli
-        let routeId = route.id
-        return {
-            let trips = try await foli.fetchTrips(forRoute: routeId)
-            // One representative trip per direction names its section.
-            let byDirection = Dictionary(grouping: trips, by: \.directionId)
-            var directions: [RouteDirection] = []
-            for directionId in byDirection.keys.sorted() {
-                guard let trip = byDirection[directionId]?.first else { continue }
-                let stopTimes = try await foli.fetchStopTimes(forTrip: trip.tripId)
-                    .sorted { $0.stopSequence < $1.stopSequence }
-                var stops: [Foli.Stop] = []
-                for stopTime in stopTimes {
-                    guard let stopId = stopTime.stopId else { continue }
-                    if let stop = try? await foli.fetchStop(id: stopId) {
-                        stops.append(stop)
+    @ViewBuilder
+    private var content: some View {
+        switch routeDetail.directions.state {
+        case .loading:
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .success:
+            if let direction = routeDetail.selectedDirection {
+                List {
+                    Section(direction.headsign) {
+                        ForEach(direction.stops) { stop in
+                            Button {
+                                selectedStopID = stop.id
+                            } label: {
+                                HStack {
+                                    Text(stop.id).monospaced()
+                                    Text(stop.name)
+                                    Spacer()
+                                }
+                            }
+                            .tint(.primary)
+                        }
                     }
                 }
-                directions.append(RouteDirection(id: directionId, headsign: trip.tripHeadsign, stops: stops))
+            } else {
+                ContentUnavailableView("No Stops", systemImage: "bus", description: Text("This route has no stop information."))
             }
-            return directions
+        case .failure(let error):
+            ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error.localizedDescription))
         }
     }
 }

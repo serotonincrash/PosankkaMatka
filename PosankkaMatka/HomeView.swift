@@ -44,9 +44,9 @@ struct HomeView: View {
 
     @State private var stop: StopWithDistance?
     @State private var selectedRoute: Foli.Route?
-    /// One coordinate path per shape variant of the selected route; empty when no
-    /// route is selected. Drawn as polylines over the stop markers.
-    @State private var routeShapes: [[CLLocationCoordinate2D]] = []
+    /// Shared per-direction data (line + stops) and the selected direction, read
+    /// by the map here and the pushed `RouteDetailList`.
+    @State private var routeDetail = RouteDetailStore()
 
     var body: some View {
         // Single screen: map + one persistent sheet holding stops and routes.
@@ -69,6 +69,9 @@ struct HomeView: View {
         .onChange(of: selectedRoute) { _, newRoute in
             handleRouteSelection(newRoute)
         }
+        .onChange(of: routeDetail.selectedDirectionId) { _, _ in
+            frameSelectedDirection()
+        }
         .sheet(isPresented: .constant(true)) {
             NavigationStack {
                 ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
@@ -90,13 +93,13 @@ struct HomeView: View {
                     }
                     .navigationDestination(item: $selectedRoute) { route in
                         RouteDetailList(route: route, selectedStopID: $selectedStopID)
-                            .id(route.id)
                     }
             }
         }
         .environment(locationManager)
         .environment(stopsStore)
         .environment(routesStore)
+        .environment(routeDetail)
         .task {
             let foli = foli
             async let stops: Void = stopsStore.load { try await foli.fetchStops() }
@@ -117,11 +120,28 @@ struct HomeView: View {
     /// change reuses the same array (stable identities → no marker rebuild).
     @MapContentBuilder
     private var mapContent: some MapContent {
-        // Selected route's path(s), drawn beneath the markers in the route color.
-        ForEach(Array(routeShapes.enumerated()), id: \.offset) { _, path in
+        // The selected direction's line, drawn beneath the markers in route color.
+        if let path = routeDetail.selectedDirection?.path, !path.isEmpty {
             MapPolyline(coordinates: path)
                 .stroke(selectedRoute?.color ?? .accentColor,
                         style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+        }
+        // Start/end pins for the selected direction — shown at any zoom (few and
+        // meaningful), and outside the `selection:` tag space so they don't
+        // collide with stop selection.
+        if let direction = routeDetail.selectedDirection {
+            if let start = direction.start {
+                Annotation("Start", coordinate: start) {
+                    routeEndpointPin(systemImage: "smallcircle.filled.circle.fill")
+                }
+                .annotationTitles(.hidden)
+            }
+            if let end = direction.end {
+                Annotation("End", coordinate: end) {
+                    routeEndpointPin(systemImage: "flag.checkered")
+                }
+                .annotationTitles(.hidden)
+            }
         }
         ForEach(displayedStops) { stop in
             if let coordinate = stop.location?.toCLCoordinate() {
@@ -134,6 +154,17 @@ struct HomeView: View {
                     .tag(stop.id)
             }
         }
+    }
+
+    /// A route start/end pin glyph in the route color, distinct from stop markers.
+    private func routeEndpointPin(systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.headline)
+            .foregroundStyle(.white)
+            .padding(8)
+            .background(selectedRoute?.color ?? .accentColor, in: Circle())
+            .overlay(Circle().stroke(.white, lineWidth: 2))
+            .shadow(radius: 2)
     }
 
     // MARK: - Selection
@@ -171,38 +202,28 @@ struct HomeView: View {
         stop = StopWithDistance(found)
     }
 
-    /// Selecting a route draws its line(s) on the shared map and raises the sheet;
-    /// deselecting (route detail popped) clears the overlay.
+    /// Selecting a route loads its per-direction data (the map draws the selected
+    /// direction; framing follows `selectedDirectionId`). Deselecting clears it.
     private func handleRouteSelection(_ route: Foli.Route?) {
         guard let route else {
-            routeShapes = []
+            routeDetail.reset()
             return
         }
         withAnimation { selectedDetent = .medium }
         let foli = foli
-        Task {
-            let shapes = (try? await fetchRouteShapes(route.id, using: foli)) ?? []
-            routeShapes = shapes
-            if let region = MKCoordinateRegion(enclosing: shapes.flatMap { $0 }) {
-                withAnimation { camera = .region(region) }
-            }
-        }
+        Task { await routeDetail.load(routeId: route.id, using: foli) }
     }
 
-    /// route → shape variant paths, fetched in parallel (all cached).
-    private func fetchRouteShapes(_ routeId: String, using foli: FoliService) async throws -> [[CLLocationCoordinate2D]] {
-        let shapeIds = try await foli.fetchShapeIds(forRoute: routeId)
-        return try await withThrowingTaskGroup(of: [CLLocationCoordinate2D].self) { group in
-            for shapeId in shapeIds {
-                group.addTask {
-                    let points = try await foli.fetchShapePoints(forShape: shapeId)
-                    return points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-                }
-            }
-            var paths: [[CLLocationCoordinate2D]] = []
-            for try await path in group where !path.isEmpty { paths.append(path) }
-            return paths
-        }
+    /// Frames the camera on the currently selected direction's path (falling back
+    /// to its stop coordinates if the shape is unavailable). Driven by
+    /// `selectedDirectionId`, so it covers both initial load and Picker changes.
+    private func frameSelectedDirection() {
+        guard let direction = routeDetail.selectedDirection else { return }
+        let coords = direction.path.isEmpty
+            ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
+            : direction.path
+        guard let region = MKCoordinateRegion(enclosing: coords) else { return }
+        withAnimation { camera = .region(region) }
     }
 
     // MARK: - Helpers
