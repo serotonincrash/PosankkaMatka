@@ -19,6 +19,9 @@ struct SearchList: View {
     @Binding var search: String
     @State var stops: [Foli.Stop]
     @Binding var searchFilter: SortState
+    /// Shared with the map: setting this recenters/highlights the stop and
+    /// triggers navigation to `StopView` on HomeView's stack.
+    @Binding var selectedStopID: Foli.Stop.ID?
     var body: some View {
         if !isSearching {
             let filteredStops = filter(stops)
@@ -28,8 +31,8 @@ struct SearchList: View {
                     ContentUnavailableView("No Stops", systemImage: "questionmark", description: Text(searchFilter == .none ? "There are no stops available." : "There are no stops matching the given criteria."))
                 } else {
                     List(filteredStops) { stopWithDistance in
-                        NavigationLink {
-                            StopView(stopWithDistance: stopWithDistance)
+                        Button {
+                            selectedStopID = stopWithDistance.stop.id
                         } label: {
                             HStack {
                                 Text(stopWithDistance.stop.id)
@@ -42,9 +45,10 @@ struct SearchList: View {
                                             .font(.subheadline)
                                     }
                                 }
-                                
+
                             }
                         }
+                        .tint(.primary)
                     }
                 }
             }
@@ -100,19 +104,17 @@ struct SearchList: View {
                     } else {
                         VStack {
                             List(filteredStops) { stop in
-                                NavigationLink {
-                                    StopView(stopWithDistance: .init(stop))
-//                                        .navigationTransition(.zoom(sourceID: stop.id + stop.name, in: namespace))
+                                Button {
+                                    selectedStopID = stop.id
                                 } label: {
                                     #warning("TODO turn this into a cell showing the routes too?")
                                     HStack {
                                         Text(stop.id)
                                             .monospaced()
                                         Text(stop.name)
-//                                            .matchedTransitionSource(id: stop.id + stop.name, in: namespace)
-                                        
                                     }
                                 }
+                                .tint(.primary)
                             }
                         }
                     }

@@ -32,6 +32,10 @@ struct HomeView: View {
     /// The region that produced `displayedStops`, used to skip no-op recomputes.
     @State private var lastMarkerRegion: MKCoordinateRegion?
     @State private var selectedStopID: Foli.Stop.ID?
+    /// The sheet's current detent. Starts at `.medium` (so the list is visible
+    /// on launch) and is bound so tapping a marker can raise it to `.medium`,
+    /// keeping `StopView` visible rather than obscured at the peek.
+    @State private var selectedDetent: PresentationDetent = .medium
 
     @State private var stop: StopWithDistance?
 
@@ -49,20 +53,29 @@ struct HomeView: View {
                 .onChange(of: selectedStopID) { _, newValue in
                     handleSelection(newValue)
                 }
+                .onChange(of: stop) { _, newStop in
+                    // Returned to the list: drop the marker highlight so the same
+                    // stop is re-tappable.
+                    if newStop == nil { selectedStopID = nil }
+                }
                 .sheet(isPresented: .constant(true)) {
                     NavigationStack {
-                        ListStopsView()
+                        ListStopsView(selectedStopID: $selectedStopID)
                             // No `.large` detent: at full coverage iOS dims the
                             // presenter regardless of the undimmed boundary, and that
                             // dim layer hitches the live Map. Capping at `.medium`
                             // avoids it; the list is fully usable at that height.
                             // Background interaction stays enabled (keeps the map
                             // tappable and undimmed) at both remaining detents.
-                            .presentationDetents([.height(110), .medium])
+                            .presentationDetents([.height(110), .medium], selection: $selectedDetent)
                             .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                             .interactiveDismissDisabled()
                         .navigationDestination(item: $stop) { stop in
                             StopView(stopWithDistance: stop)
+                                // New stop id → fresh StopView identity → its
+                                // @State store resets and re-fetches arrivals,
+                                // rather than reusing the previous stop's data.
+                                .id(stop.id)
                         }
                     }
                 }
@@ -101,16 +114,17 @@ struct HomeView: View {
 
     // MARK: - Selection
 
-    /// Tapping a stop opens its `StopView` and recenters the map on it (keeping
-    /// the current zoom). The target is nudged south so it lands in the visible
-    /// strip above the sheet rather than behind it — the map itself carries no
-    /// sheet inset (that caused a detent hitch), so we offset only here, once.
-    /// Resets `selectedStopID` so the same stop can be re-tapped.
+    /// Tapping a stop opens its `StopView`, keeps the marker highlighted,
+    /// recenters the map on it (keeping the current zoom), and raises the sheet
+    /// to `.medium` so the detail isn't obscured at the peek. The target is
+    /// nudged south so the stop lands in the visible strip above the sheet — the
+    /// map carries no sheet inset (that caused a detent hitch), so we offset only
+    /// here, once. `selectedStopID` is *not* cleared here (that would drop the
+    /// highlight); it's cleared in `onChange(of: stop)` when the user returns.
     private func handleSelection(_ newValue: Foli.Stop.ID?) {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
-        stop = StopWithDistance(found)
         let span = visibleRegion?.span ?? Self.defaultSpan
         // Shift the center south by a quarter-span so the stop sits above the
         // (roughly half-screen) sheet when it's expanded.
@@ -118,10 +132,15 @@ struct HomeView: View {
             latitude: coordinate.latitude - span.latitudeDelta * 0.25,
             longitude: coordinate.longitude
         )
-        withAnimation {
+        // Animate the camera move on its own transaction so the concurrent
+        // navigation push / detent change don't cause MapKit to skip it.
+        withAnimation(.easeInOut(duration: 0.4)) {
             camera = .region(MKCoordinateRegion(center: center, span: span))
         }
-        selectedStopID = nil
+        withAnimation {
+            selectedDetent = .medium
+        }
+        stop = StopWithDistance(found)
     }
 
     // MARK: - Helpers
