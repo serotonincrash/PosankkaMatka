@@ -11,11 +11,11 @@ struct StopView: View {
     @Namespace var namespace
     var stopWithDistance: StopWithDistance
     @FoliService var foli
-    @State var arrivalState: ResourceState<[Foli.Arrival]> = .loading
-    
+    @State private var arrivals = ResourceStore<[Foli.Arrival]>()
+
     var body: some View {
         Group {
-            switch (arrivalState) {
+            switch (arrivals.state) {
             case .loading:
                 ProgressView()
             case .success(let arrivals):
@@ -44,23 +44,20 @@ struct StopView: View {
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))}
         }
+        .animation(.spring(.bouncy), value: arrivals.state)
         .refreshable {
-            await refreshStop()
+            await arrivals.refresh(fetch)
         }
         .task {
-            await refreshStop()
+            await arrivals.load(fetch)
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
-        
+
     }
-    func refreshStop() async {
-        do {
-            let arrivalData = try await foli.fetchArrivals(for: stopWithDistance.stop.id)
-            withAnimation(.spring(.bouncy)) {
-                arrivalState = .success(arrivalData)
-            }
-        } catch {
-            arrivalState = .failure(error as? Foli.APIError ?? .networkError(error))
-        }
+
+    private var fetch: @Sendable () async throws -> [Foli.Arrival] {
+        let foli = foli
+        let stopId = stopWithDistance.stop.id
+        return { try await foli.fetchArrivals(for: stopId) }
     }
 }

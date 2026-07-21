@@ -49,6 +49,7 @@ struct SearchList: View {
                 }
             }
             .navigationTitle(Text("Nearby"))
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Menu {
                     Button {

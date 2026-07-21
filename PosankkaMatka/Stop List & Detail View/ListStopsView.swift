@@ -12,38 +12,29 @@ import CoreLocationUI
 import Forever
 
 struct ListStopsView: View {
-    @FoliService var foli
     @State var search = ""
-    @State var stopState: ResourceState<[Foli.Stop]> = .loading
+    @Environment(ResourceStore<[Foli.Stop]>.self) private var stopsStore
     @Environment(LocationManager.self) var locationManager
-    @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
+    @Forever("nearbySearchFilter") var searchFilter: SearchList.SortState = .proximity(2000)
     @Environment(\.isSearching) var isSearching: Bool
     var body: some View {
         NavigationStack {
-            switch (stopState) {
+            switch (stopsStore.state) {
             case .loading:
                 ProgressView()
             case .success(let stops):
                 SearchList(search: $search, stops: stops, searchFilter: $searchFilter)
-                    .searchable(text: $search, prompt: Text("Search by name or code"))
+                    .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search by name or code"))
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))
             }
         }
-        
-        .task {
-            do {
-                let stopData = try await foli.fetchStops()
-                stopState = .success(stopData)
-            } catch {
-                stopState = .failure(error as? Foli.APIError ?? .networkError(error))
-            }
-        }
-        
     }
-    
+
 }
 
 #Preview {
     ListStopsView()
+        .environment(ResourceStore<[Foli.Stop]>())
+        .environment(LocationManager())
 }
