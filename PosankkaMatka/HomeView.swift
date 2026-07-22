@@ -37,64 +37,69 @@ struct HomeView: View {
     /// The region that produced `displayedStops`, used to skip no-op recomputes.
     @State private var lastMarkerRegion: MKCoordinateRegion?
     @State private var selectedStopID: Foli.Stop.ID?
-    /// The sheet's current detent. Starts at `.medium` (so the list is visible
-    /// on launch) and is bound so tapping a marker can raise it to `.medium`,
-    /// keeping `StopView` visible rather than obscured at the peek.
-    @State private var selectedDetent: PresentationDetent = .medium
-
     @State private var stop: StopWithDistance?
     @State private var selectedRoute: Foli.Route?
     /// Shared per-direction data (line + stops) and the selected direction, read
     /// by the map here and the pushed `RouteDetailList`.
     @State private var routeDetail = RouteDetailStore()
 
+    // Cached route-draw state. `mapContent` reads ONLY these (never
+    // `routeDetail.selectedDirection` live), so a detent-drag body re-eval reuses
+    // stable values instead of re-diffing the polyline every frame. Updated in
+    // `updateDrawnRoute()` on real direction/route changes — same discipline as
+    // `displayedStops`.
+    @State private var drawnRoutePath: [CLLocationCoordinate2D] = []
+    @State private var routeStart: CLLocationCoordinate2D?
+    @State private var routeEnd: CLLocationCoordinate2D?
+    @State private var drawnRouteColor: Color = .accentColor
+    /// Identity of the drawn route+direction ("routeId:directionId", nil = none);
+    /// MapView uses it in `==` to detect when the drawn line must change.
+    @State private var routeDrawKey: String?
+
     var body: some View {
-        // Single screen: map + one persistent sheet holding stops and routes.
-        Map(position: $camera, selection: $selectedStopID) {
-            UserAnnotation()
-            mapContent
-        }
-        .onMapCameraChange(frequency: .onEnd) { context in
-            visibleRegion = context.region
-            updateDisplayedStops(for: context.region)
-        }
-        .onChange(of: selectedStopID) { _, newValue in
-            handleStopSelection(newValue)
-        }
-        .onChange(of: stop) { _, newStop in
-            // Returned to the list: drop the marker highlight so the same
-            // stop is re-tappable.
-            if newStop == nil { selectedStopID = nil }
-        }
-        .onChange(of: selectedRoute) { _, newRoute in
-            handleRouteSelection(newRoute)
-        }
-        .onChange(of: routeDetail.selectedDirectionId) { _, _ in
-            frameSelectedDirection()
-        }
-        .sheet(isPresented: .constant(true)) {
-            NavigationStack {
-                ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
-                    // No `.large` detent: at full coverage iOS dims the
-                    // presenter regardless of the undimmed boundary, and that
-                    // dim layer hitches the live Map. Capping at `.medium`
-                    // avoids it; the list is fully usable at that height.
-                    // Background interaction stays enabled (keeps the map
-                    // tappable and undimmed) at both remaining detents.
-                    .presentationDetents([.height(110), .medium], selection: $selectedDetent)
-                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                    .interactiveDismissDisabled()
-                    .navigationDestination(item: $stop) { stop in
-                        StopView(stopWithDistance: stop)
-                            // New stop id → fresh StopView identity → its
-                            // @State store resets and re-fetches arrivals,
-                            // rather than reusing the previous stop's data.
-                            .id(stop.id)
-                    }
-                    .navigationDestination(item: $selectedRoute) { route in
-                        RouteDetailList(route: route, selectedStopID: $selectedStopID)
-                    }
+        // Map + the sheet as ZStack SIBLINGS. The sheet (and its detent state)
+        // lives in `SheetHost`, so drag-churn never re-evaluates this view / the
+        // Map. `presentationBackgroundInteraction` is host-wide, so the map stays
+        // undimmed and interactive behind the sheet despite being a sibling.
+        ZStack {
+            MapView(
+                camera: $camera,
+                selectedStopID: $selectedStopID,
+                displayedStops: displayedStops,
+                drawnRoutePath: drawnRoutePath,
+                routeStart: routeStart,
+                routeEnd: routeEnd,
+                drawnRouteColor: drawnRouteColor,
+                routeDrawKey: routeDrawKey
+            )
+            .equatable()
+            .ignoresSafeArea()
+            .onMapCameraChange(frequency: .onEnd) { context in
+                visibleRegion = context.region
+                updateDisplayedStops(for: context.region)
             }
+            .onChange(of: selectedStopID) { _, newValue in
+                handleStopSelection(newValue)
+            }
+            .onChange(of: stop) { _, newStop in
+                // Returned to the list: drop the marker highlight so the same
+                // stop is re-tappable.
+                if newStop == nil { selectedStopID = nil }
+            }
+            .onChange(of: selectedRoute) { _, newRoute in
+                handleRouteSelection(newRoute)
+            }
+            .onChange(of: routeDetail.selectedDirectionId) { _, _ in
+                updateDrawnRoute()
+                frameSelectedDirection()
+            }
+
+            SheetHost(
+                selectedStopID: $selectedStopID,
+                selectedRoute: $selectedRoute,
+                stop: $stop,
+                showingDetail: showingDetail
+            )
         }
         .environment(locationManager)
         .environment(stopsStore)
@@ -113,58 +118,6 @@ struct HomeView: View {
 
     private var allStops: [Foli.Stop] {
         stopsStore.state.value ?? []
-    }
-
-    /// Renders the precomputed `displayedStops`. The set is maintained in
-    /// `updateDisplayedStops(for:)`, so a `body` re-eval from an inset/detent
-    /// change reuses the same array (stable identities → no marker rebuild).
-    @MapContentBuilder
-    private var mapContent: some MapContent {
-        // The selected direction's line, drawn beneath the markers in route color.
-        if let path = routeDetail.selectedDirection?.path, !path.isEmpty {
-            MapPolyline(coordinates: path)
-                .stroke(selectedRoute?.color ?? .accentColor,
-                        style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-        }
-        // Start/end pins for the selected direction — shown at any zoom (few and
-        // meaningful), and outside the `selection:` tag space so they don't
-        // collide with stop selection.
-        if let direction = routeDetail.selectedDirection {
-            if let start = direction.start {
-                Annotation("Start", coordinate: start) {
-                    routeEndpointPin(systemImage: "smallcircle.filled.circle.fill")
-                }
-                .annotationTitles(.hidden)
-            }
-            if let end = direction.end {
-                Annotation("End", coordinate: end) {
-                    routeEndpointPin(systemImage: "flag.checkered")
-                }
-                .annotationTitles(.hidden)
-            }
-        }
-        ForEach(displayedStops) { stop in
-            if let coordinate = stop.location?.toCLCoordinate() {
-                // System Marker keeps MapKit's label decluttering (a compact
-                // bus glyph when dense) and shows the stop name when selected.
-                // TODO: Finnish bus stops use distinctive real-world signage;
-                // explore representing that here (e.g. a custom Annotation with
-                // a Föli-style sign glyph) instead of the generic bus icon.
-                Marker(stop.name, systemImage: "bus.fill", coordinate: coordinate)
-                    .tag(stop.id)
-            }
-        }
-    }
-
-    /// A route start/end pin glyph in the route color, distinct from stop markers.
-    private func routeEndpointPin(systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.headline)
-            .foregroundStyle(.white)
-            .padding(8)
-            .background(selectedRoute?.color ?? .accentColor, in: Circle())
-            .overlay(Circle().stroke(.white, lineWidth: 2))
-            .shadow(radius: 2)
     }
 
     // MARK: - Selection
@@ -196,22 +149,41 @@ struct HomeView: View {
         withAnimation(.easeInOut(duration: 0.4)) {
             camera = .region(MKCoordinateRegion(center: center, span: span))
         }
-        withAnimation {
-            selectedDetent = .medium
-        }
+        // Detent raise is centralized in `.onChange(of: showingDetail)`.
         stop = StopWithDistance(found)
     }
+
+    /// Whether a detail (stop or route) is currently pushed — drives the detent.
+    private var showingDetail: Bool { stop != nil || selectedRoute != nil }
 
     /// Selecting a route loads its per-direction data (the map draws the selected
     /// direction; framing follows `selectedDirectionId`). Deselecting clears it.
     private func handleRouteSelection(_ route: Foli.Route?) {
         guard let route else {
             routeDetail.reset()
+            updateDrawnRoute()   // clears the cached line + pins
             return
         }
-        withAnimation { selectedDetent = .medium }
         let foli = foli
         Task { await routeDetail.load(routeId: route.id, using: foli) }
+    }
+
+    /// Copies the selected direction's path/endpoints/color into cached `@State`
+    /// so `mapContent` never reads `routeDetail` live (avoids re-diffing the
+    /// polyline on detent-drag body re-evals). Call on direction/route change.
+    private func updateDrawnRoute() {
+        guard let direction = routeDetail.selectedDirection else {
+            drawnRoutePath = []
+            routeStart = nil
+            routeEnd = nil
+            routeDrawKey = nil
+            return
+        }
+        drawnRoutePath = direction.path
+        routeStart = direction.start
+        routeEnd = direction.end
+        drawnRouteColor = selectedRoute?.color ?? .accentColor
+        routeDrawKey = "\(selectedRoute?.id ?? "")-\(direction.id)"
     }
 
     /// Frames the camera on the currently selected direction's path (falling back
