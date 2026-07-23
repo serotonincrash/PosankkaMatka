@@ -38,6 +38,10 @@ struct HomeView: View {
     @State private var lastMarkerRegion: MKCoordinateRegion?
     @State private var selectedStopID: Foli.Stop.ID?
     @State private var stop: StopWithDistance?
+    /// Shared sheet detent. Owned here, bound by `SheetHost`, and read by route
+    /// framing (in methods only — NEVER in `body`, which would re-subscribe to
+    /// per-drag-frame writes and bring back the detent hitch).
+    @State private var sheetModel = SheetModel()
     @State private var selectedRoute: Foli.Route?
     /// Shared per-direction data (line + stops) and the selected direction, read
     /// by the map here and the pushed `RouteDetailList`.
@@ -89,16 +93,19 @@ struct HomeView: View {
             .onChange(of: selectedRoute) { _, newRoute in
                 handleRouteSelection(newRoute)
             }
+            // Redraw the line/pins for the newly selected direction, but do NOT
+            // move the camera — a Picker switch keeps the map where it is. Camera
+            // framing happens only on the initial route open (handleRouteSelection).
             .onChange(of: routeDetail.selectedDirectionId) { _, _ in
                 updateDrawnRoute()
-                frameSelectedDirection()
             }
 
             SheetHost(
                 selectedStopID: $selectedStopID,
                 selectedRoute: $selectedRoute,
                 stop: $stop,
-                showingDetail: showingDetail
+                showingDetail: showingDetail,
+                sheetModel: sheetModel
             )
         }
         .environment(locationManager)
@@ -165,7 +172,12 @@ struct HomeView: View {
             return
         }
         let foli = foli
-        Task { await routeDetail.load(routeId: route.id, using: foli) }
+        Task {
+            await routeDetail.load(routeId: route.id, using: foli)
+            // Frame once, on initial open — Picker switches afterward don't move
+            // the camera (only redraw the line/pins).
+            frameSelectedDirection()
+        }
     }
 
     /// Copies the selected direction's path/endpoints/color into cached `@State`
@@ -187,15 +199,37 @@ struct HomeView: View {
     }
 
     /// Frames the camera on the currently selected direction's path (falling back
-    /// to its stop coordinates if the shape is unavailable). Driven by
-    /// `selectedDirectionId`, so it covers both initial load and Picker changes.
+    /// to its stop coordinates if the shape is unavailable), offset so the route
+    /// sits in the map area VISIBLE above the sheet at the current detent — not
+    /// centered behind it. Driven by `selectedDirectionId` (initial load + Picker
+    /// changes). Reads `sheetModel.selectedDetent` here (a method, not `body`).
     private func frameSelectedDirection() {
         guard let direction = routeDetail.selectedDirection else { return }
         let coords = direction.path.isEmpty
             ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
             : direction.path
         guard let region = MKCoordinateRegion(enclosing: coords) else { return }
-        withAnimation { camera = .region(region) }
+
+        // Fit the route into the visible fraction above the sheet: inflate the
+        // span so the route occupies only that fraction, then shift the center
+        // south (lower latitude) by the added height so it sits in the top part.
+        let fraction = visibleFraction(for: sheetModel.selectedDetent)
+        let latDelta = region.span.latitudeDelta / fraction
+        let addedLat = latDelta - region.span.latitudeDelta
+        let framed = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: region.center.latitude - addedLat / 2,
+                longitude: region.center.longitude
+            ),
+            span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: region.span.longitudeDelta)
+        )
+        withAnimation { camera = .region(framed) }
+    }
+
+    /// Approximate fraction of the map height left visible above the sheet at a
+    /// given detent. Peek leaves almost all of it; medium ~the top half.
+    private func visibleFraction(for detent: PresentationDetent) -> CGFloat {
+        detent == .medium ? 0.5 : 0.85
     }
 
     // MARK: - Helpers

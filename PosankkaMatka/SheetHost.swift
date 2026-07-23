@@ -6,7 +6,22 @@
 //
 
 import SwiftUI
+import Observation
 import FoliBusUI
+
+/// Shared sheet state. Holds `selectedDetent` so both `SheetHost` (which binds
+/// the sheet's `selection:` to it) and `HomeView` (which reads it — in a method,
+/// never in `body` — to frame routes above the sheet) see one source of truth.
+///
+/// Owned by `HomeView` as `@State`. IMPORTANT: `HomeView.body` must not read
+/// `selectedDetent`, or it would re-subscribe to the per-drag-frame writes and
+/// bring back the detent hitch. Only `SheetHost` binds it and only framing
+/// methods read it (at call time, on discrete events).
+@MainActor
+@Observable
+final class SheetModel {
+    var selectedDetent: PresentationDetent = .medium
+}
 
 /// Hosts the persistent home sheet **in isolation from the map**. Owning
 /// `selectedDetent` here (instead of on `HomeView`) means the continuous
@@ -23,8 +38,8 @@ struct SheetHost: View {
     @Binding var stop: StopWithDistance?
     /// Whether a detail is shown (computed on HomeView); drives the detent raise.
     let showingDetail: Bool
-
-    @State private var selectedDetent: PresentationDetent = .medium
+    /// Shared detent state (owned by HomeView). SheetHost binds the sheet to it.
+    @Bindable var sheetModel: SheetModel
 
     var body: some View {
         Color.clear
@@ -36,7 +51,7 @@ struct SheetHost: View {
                         // presenter regardless of the undimmed boundary, and that
                         // dim layer hitches the live Map. Capping at `.medium`
                         // avoids it; the list is fully usable at that height.
-                        .presentationDetents([.height(110), .medium], selection: $selectedDetent)
+                        .presentationDetents([.height(110), .medium], selection: $sheetModel.selectedDetent)
                         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                         .interactiveDismissDisabled()
                         .navigationDestination(item: $stop) { stop in
@@ -54,8 +69,8 @@ struct SheetHost: View {
             // when a detail appears, only if currently at peek; never auto-drop on
             // return, so the user's manual detent is respected.
             .onChange(of: showingDetail) { _, isShowing in
-                if isShowing, selectedDetent == .height(110) {
-                    withAnimation { selectedDetent = .medium }
+                if isShowing, sheetModel.selectedDetent == .height(110) {
+                    withAnimation { sheetModel.selectedDetent = .medium }
                 }
             }
     }
