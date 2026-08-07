@@ -51,7 +51,7 @@ struct SheetHost: View {
                         // presenter regardless of the undimmed boundary, and that
                         // dim layer hitches the live Map. Capping at `.medium`
                         // avoids it; the list is fully usable at that height.
-                        .presentationDetents([.height(110), .medium], selection: $sheetModel.selectedDetent)
+                        .presentationDetents([.height(110), .medium, .large], selection: $sheetModel.selectedDetent)
                         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                         .interactiveDismissDisabled()
                         .navigationDestination(item: $stop) { stop in
