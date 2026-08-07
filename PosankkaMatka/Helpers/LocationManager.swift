@@ -11,54 +11,63 @@ internal import Combine
 
 @Observable
 final class LocationManager: NSObject, CLLocationManagerDelegate  {
-    @ObservationIgnored
+    /// The most recent coordinate. Observable, so views showing distances update as
+    /// the user moves. `distanceFilter` below bounds how often that happens.
     var currentLocation: CLLocationCoordinate2D?
+
+    /// Current authorization, mirrored into observable state by the delegate so
+    /// views can read it without touching `CLLocationManager`.
+    private(set) var isAuthorized: Bool = false
+
+    /// Not observable: it's a mutable reference type whose own properties SwiftUI
+    /// can't track, and reading it from a `body` registered a spurious dependency.
+    @ObservationIgnored
     var locationManager: CLLocationManager = CLLocationManager()
-    
+
     override init() {
         super.init()
-        self.locationManager.requestWhenInUseAuthorization()
         self.locationManager.delegate = self
-        if checkLocationAuthorization() {
-            self.locationManager.startUpdatingLocation()
-        } else {
-            
-        }
-        
+        self.locationManager.activityType = .otherNavigation
+        self.locationManager.distanceFilter = 5
+        self.locationManager.requestWhenInUseAuthorization()
+        // Seed from the current status; the delegate keeps it current afterward.
+        refreshAuthorization()
     }
-    
-    // thanks random medium page
+
+    /// A pure read — no side effects, safe to call from a `body`.
+    ///
+    /// Previously this both mutated `currentLocation` and could trigger an
+    /// authorization request, which meant rendering a view could change model
+    /// state. Starting/stopping updates now lives in `refreshAuthorization()`,
+    /// driven by the delegate.
     func checkLocationAuthorization() -> Bool {
-        
-        switch self.locationManager.authorizationStatus {
-        case .notDetermined: //The user choose allow or denny your app to get the location yet
-            self.locationManager.requestWhenInUseAuthorization()
-            // The result of this will
-            return false
-        case .restricted://The user cannot change this app’s status, possibly due to active restrictions such as parental controls being in place.
-            return false
-            
-        case .denied://The user dennied your app to get location or disabled the services location or the phone is in airplane mode
-            return false
-            
-        case .authorizedAlways://This authorization allows you to use all location services and receive location events whether or not your app is in use.
-            return true
-        case .authorizedWhenInUse://This authorization allows you to use all location services and receive location events only when your app is in use
+        isAuthorized
+    }
+
+    /// Recomputes `isAuthorized` from the system status and starts or stops
+    /// location updates to match.
+    private func refreshAuthorization() {
+        switch locationManager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            isAuthorized = true
             if currentLocation == nil {
-                currentLocation = self.locationManager.location?.coordinate
+                currentLocation = locationManager.location?.coordinate
             }
-            return true
+            locationManager.startUpdatingLocation()
+        case .notDetermined, .restricted, .denied:
+            isAuthorized = false
+            locationManager.stopUpdatingLocation()
         @unknown default:
-            print("Location service disabled")
-            return false
+            isAuthorized = false
+            locationManager.stopUpdatingLocation()
         }
     }
-    
+
     func locationManagerDidChangeAuthorization(_ locationManager: CLLocationManager) {
-        _ = checkLocationAuthorization()
+        refreshAuthorization()
     }
-    
+
     func locationManager(_ locationManager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        currentLocation = locations.first?.coordinate
+        currentLocation = locations.last?.coordinate
     }
 }
