@@ -52,12 +52,10 @@ final class NearbyStopsProvider {
         lastFilter = filter
         lastCoordinate = coordinate
 
-        // No usable location: fall back to a stable id ordering with no distances.
+        // No usable location: nearby is undefined. Surface nothing and let the
+        // view disclose the state — it tracks authorization separately.
         guard let coordinate, let origin = CLLocation(coordinate) else {
-            rows = stops
-                .sorted { (Int($0.id) ?? 0) < (Int($1.id) ?? 0) }
-                .prefix(limit)
-                .map { StopWithDistance($0) }
+            rows = []
             return
         }
 

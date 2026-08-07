@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import FoliBusUI
 
 /// The combined home-sheet list: "Nearby Stops" and "Routes" in one map-backed
@@ -19,7 +20,9 @@ struct HomeSheetList: View {
     let stops: [Foli.Stop]
     let routes: [Foli.Route]
     /// Precomputed nearby rows (see `NearbyStopsProvider`). Passed in rather than
-    /// derived here so `body` stays pure rendering.
+    /// derived here so `body` stays pure rendering. Empty when there's no location
+    /// or when the proximity filter excludes everything — `stopsDisclosure` covers
+    /// both cases so the section never vanishes silently.
     let nearbyStops: [StopWithDistance]
     /// Whether location is authorized — resolved once by the parent instead of
     /// calling into `LocationManager` from `body`.
@@ -35,15 +38,19 @@ struct HomeSheetList: View {
                 emptyState
             } else {
                 List {
-                    if !stopRows.isEmpty {
+                    if showsStopsSection {
                         Section(stopSectionTitle) {
-                            ForEach(stopRows) { stopWithDistance in
-                                Button {
-                                    selectedStopID = stopWithDistance.stop.id
-                                } label: {
-                                    StopRow(stopWithDistance: stopWithDistance)
+                            if stopRows.isEmpty {
+                                stopsDisclosure
+                            } else {
+                                ForEach(stopRows) { stopWithDistance in
+                                    Button {
+                                        selectedStopID = stopWithDistance.stop.id
+                                    } label: {
+                                        StopRow(stopWithDistance: stopWithDistance)
+                                    }
+                                    .tint(.primary)
                                 }
-                                .tint(.primary)
                             }
                         }
                     }
@@ -122,59 +129,97 @@ struct HomeSheetList: View {
         }
     }
 
-    private var isListEmpty: Bool { stopRows.isEmpty && routeRows.isEmpty }
+    /// The full-sheet empty state fires only for a text search with no matches
+    /// anywhere; idle always renders the list — an empty nearby set is disclosed
+    /// in place by `stopsDisclosure` rather than blanking the whole sheet.
+    private var isListEmpty: Bool { isSearching && stopRows.isEmpty && routeRows.isEmpty }
 
-    private var stopSectionTitle: String {
-        (isSearching || !isLocationAuthorized) ? "Stops" : "Nearby Stops"
-    }
+    /// In search, show the stops section only if it has matches; in idle it
+    /// always shows (rows, or a disclosure explaining the empty state).
+    private var showsStopsSection: Bool { isSearching ? !stopRows.isEmpty : true }
+
+    private var stopSectionTitle: String { isSearching ? "Stops" : "Nearby Stops" }
 
     /// The proximity filter is meaningful only in the idle list with a location.
     private var showsFilterMenu: Bool { isLocationAuthorized && !isSearching }
 
-    // MARK: - Empty state
+    // MARK: - Empty / disclosure states
 
+    /// Full-sheet empty state, reached only while searching (see `isListEmpty`).
     @ViewBuilder
     private var emptyState: some View {
-        if isSearching && search.isEmpty {
+        if search.isEmpty {
             ContentUnavailableView("Start typing", systemImage: "magnifyingglass", description: Text("Search for a stop or route by name or number."))
-        } else if isSearching {
-            ContentUnavailableView.search(text: search)
         } else {
-            ContentUnavailableView("Nothing to show", systemImage: "bus", description: Text("No stops or routes are available."))
+            ContentUnavailableView.search(text: search)
         }
     }
-}
 
-// MARK: - Rows
-
-private struct StopRow: View {
-    let stopWithDistance: StopWithDistance
-
-    var body: some View {
-        HStack {
-            Image(systemName: "signpost.right.fill")
-                .foregroundStyle(.secondary)
-                .imageScale(.small)
-            Text(stopWithDistance.stop.id).monospaced()
-            Text(stopWithDistance.stop.name)
-            Spacer()
-            if let distanceText = stopWithDistance.distanceText {
-                Text(distanceText)
-                    .font(.subheadline)
+    /// Inline message shown inside the stops section when it has no rows (idle
+    /// only — a search with no stop matches simply omits the section). Discloses
+    /// *why* it's empty and offers the recovery action.
+    @ViewBuilder
+    private var stopsDisclosure: some View {
+        if !isLocationAuthorized {
+            HStack {
+                Text("Turn on location to see nearby stops")
                     .foregroundStyle(.secondary)
+                Spacer()
+                Button("Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            }
+        } else if case .proximity(let meters) = searchFilter {
+            HStack {
+                Text("No stops within \(formattedDistance(meters))")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Show all") { searchFilter = .none }
+            }
+        } else {
+            Text("No stops available")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// "500 m" / "2 km" — matches the labels used in the filter menu.
+    private func formattedDistance(_ meters: Double) -> String {
+        meters < 1000 ? "\(Int(meters)) m" : "\(Int(meters / 1000)) km"
+    }
+
+    // MARK: - Rows
+
+    private struct StopRow: View {
+        let stopWithDistance: StopWithDistance
+
+        var body: some View {
+            HStack {
+                Image(systemName: "signpost.right.fill")
+                    .foregroundStyle(.secondary)
+                    .imageScale(.small)
+                Text(stopWithDistance.stop.id).monospaced()
+                Text(stopWithDistance.stop.name)
+                Spacer()
+                if let distanceText = stopWithDistance.distanceText {
+                    Text(distanceText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
-}
 
-private struct RouteRow: View {
-    let route: Foli.Route
+    private struct RouteRow: View {
+        let route: Foli.Route
 
-    var body: some View {
-        HStack(spacing: 12) {
-            RouteBadge(route: route)
-            Text(route.longName)
-            Spacer()
+        var body: some View {
+            HStack(spacing: 12) {
+                RouteBadge(route: route)
+                Text(route.longName)
+                Spacer()
+            }
         }
     }
 }
