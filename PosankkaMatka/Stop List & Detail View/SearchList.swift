@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import CoreLocation
 import FoliBusUI
 
 /// The combined home-sheet list: "Nearby Stops" and "Routes" in one map-backed
@@ -31,82 +30,106 @@ struct HomeSheetList: View {
     @Binding var selectedRoute: Foli.Route?
 
     var body: some View {
-        // Search results stay unbounded; the idle list arrives pre-trimmed.
-        let stopRows = isSearching ? searchedStops() : nearbyStops
-        let routeRows = filteredRoutes()
-
         Group {
-            List {
-                Section((isSearching || !isLocationAuthorized) ? "Stops" : "Nearby Stops") {
+            if isListEmpty {
+                emptyState
+            } else {
+                List {
                     if !stopRows.isEmpty {
-                        ForEach(stopRows) { stopWithDistance in
-                            Button { selectedStopID = stopWithDistance.stop.id } label: {
-                                HStack {
-                                    Image(systemName: "signpost.right.fill")
-                                        .foregroundStyle(.secondary)
-                                        .imageScale(.small)
-                                    Text(stopWithDistance.stop.id).monospaced()
-                                    Text(stopWithDistance.stop.name)
-                                    Spacer()
-                                    if let distance = stopWithDistance.distance {
-                                        Text(distance < 1000 ? "\(Int(distance)) m" : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
+                        Section(stopSectionTitle) {
+                            ForEach(stopRows) { stopWithDistance in
+                                Button {
+                                    selectedStopID = stopWithDistance.stop.id
+                                } label: {
+                                    StopRow(stopWithDistance: stopWithDistance)
                                 }
+                                .tint(.primary)
                             }
-                            .tint(.primary)
                         }
-                    } else {
-                        emptyState
                     }
-                }
-                Section("Routes") {
                     if !routeRows.isEmpty {
-                        
-                        ForEach(routeRows) { route in
-                            Button { selectedRoute = route } label: {
-                                HStack(spacing: 12) {
-                                    RouteBadge(route: route)
-                                    Text(route.longName)
-                                    Spacer()
+                        Section("Routes") {
+                            ForEach(routeRows) { route in
+                                Button {
+                                    selectedRoute = route
+                                } label: {
+                                    RouteRow(route: route)
                                 }
+                                .tint(.primary)
                             }
-                            .tint(.primary)
                         }
-                    } else {
-                        emptyState
                     }
                 }
             }
-        
         }
         .navigationTitle(Text("Föli"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Menu {
-                Button {
-                    searchFilter = .none
-                } label: {
-                    if searchFilter == .none {
-                        Image(systemName: "checkmark").imageScale(.small)
-                    }
-                    Label("None", systemImage: "location.slash")
-                }
-                Section("Distance") {
-                    Picker(selection: $searchFilter) {
-                        Text("500 m").tag(SortState.proximity(500))
-                        Text("1 km").tag(SortState.proximity(1000))
-                        Text("2 km").tag(SortState.proximity(2000))
+            // The proximity filter only affects the nearby (idle) list and needs
+            // a location to mean anything, so the control is shown only then.
+            if showsFilterMenu {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            searchFilter = .none
+                        } label: {
+                            if searchFilter == .none {
+                                Image(systemName: "checkmark").imageScale(.small)
+                            }
+                            Label("None", systemImage: "location.slash")
+                        }
+                        Section("Distance") {
+                            Picker(selection: $searchFilter) {
+                                Text("500 m").tag(SortState.proximity(500))
+                                Text("1 km").tag(SortState.proximity(1000))
+                                Text("2 km").tag(SortState.proximity(2000))
+                            } label: {
+                                Label("Filter by Proximity", systemImage: "location")
+                            }
+                        }
                     } label: {
-                        Label("Filter by Proximity", systemImage: "location")
+                        Image(systemName: "line.3.horizontal.decrease.circle")
                     }
                 }
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease.circle")
             }
         }
     }
+
+    // MARK: - Derived rows
+
+    /// Stops for the current mode: nearby rows when idle, name/code matches when
+    /// searching (no distances — proximity is irrelevant to a text search).
+    private var stopRows: [StopWithDistance] {
+        guard isSearching else { return nearbyStops }
+        guard !search.isEmpty else { return [] }
+        return stops
+            .filter {
+                $0.name.localizedCaseInsensitiveContains(search)
+                    || ($0.code ?? "").localizedCaseInsensitiveContains(search)
+            }
+            .map { StopWithDistance($0) }
+    }
+
+    /// Routes for the current mode: all (line-sorted) when idle, matches when
+    /// searching. Empty while search is active but the field is blank.
+    private var routeRows: [Foli.Route] {
+        let sorted = routes.sortedByLine()
+        guard isSearching else { return sorted }
+        guard !search.isEmpty else { return [] }
+        return sorted.filter {
+            $0.shortName.localizedCaseInsensitiveContains(search)
+                || $0.longName.localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    private var isListEmpty: Bool { stopRows.isEmpty && routeRows.isEmpty }
+
+    private var stopSectionTitle: String {
+        (isSearching || !isLocationAuthorized) ? "Stops" : "Nearby Stops"
+    }
+
+    /// The proximity filter is meaningful only in the idle list with a location.
+    private var showsFilterMenu: Bool { isLocationAuthorized && !isSearching }
 
     // MARK: - Empty state
 
@@ -120,27 +143,38 @@ struct HomeSheetList: View {
             ContentUnavailableView("Nothing to show", systemImage: "bus", description: Text("No stops or routes are available."))
         }
     }
+}
 
-    // MARK: - Filtering
+// MARK: - Rows
 
-    /// Routes filtered by the current search (number or name), numeric-sorted.
-    private func filteredRoutes() -> [Foli.Route] {
-        let sorted = routes.sortedByLine()
-        guard isSearching, !search.isEmpty else { return isSearching ? [] : sorted }
-        return sorted.filter {
-            $0.shortName.localizedCaseInsensitiveContains(search)
-                || $0.longName.localizedCaseInsensitiveContains(search)
+private struct StopRow: View {
+    let stopWithDistance: StopWithDistance
+
+    var body: some View {
+        HStack {
+            Image(systemName: "signpost.right.fill")
+                .foregroundStyle(.secondary)
+                .imageScale(.small)
+            Text(stopWithDistance.stop.id).monospaced()
+            Text(stopWithDistance.stop.name)
+            Spacer()
+            if let distanceText = stopWithDistance.distanceText {
+                Text(distanceText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
+}
 
-    /// Stops matching the search text (name or code).
-    private func searchedStops() -> [StopWithDistance] {
-        guard !search.isEmpty else { return [] }
-        let matches = stops.filter {
-            $0.name.localizedCaseInsensitiveContains(search)
-                || ($0.code ?? "").localizedCaseInsensitiveContains(search)
+private struct RouteRow: View {
+    let route: Foli.Route
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RouteBadge(route: route)
+            Text(route.longName)
+            Spacer()
         }
-        return matches.map { StopWithDistance($0) }
     }
-
 }

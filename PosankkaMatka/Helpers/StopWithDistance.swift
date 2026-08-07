@@ -23,4 +23,13 @@ struct StopWithDistance: Identifiable, Hashable {
         self.stop = stop
         self.distance = distance
     }
+
+    /// Human-readable distance for row display, or `nil` when no distance is set
+    /// (e.g. search results, where proximity isn't meaningful).
+    var distanceText: String? {
+        guard let distance else { return nil }
+        return distance < 1000
+            ? "\(Int(distance)) m"
+            : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km"
+    }
 }
