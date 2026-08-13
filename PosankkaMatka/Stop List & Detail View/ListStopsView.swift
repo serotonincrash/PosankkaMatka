@@ -14,9 +14,6 @@ import Forever
 /// distance filter. Reads both resource stores from the environment; it has no
 /// NavigationStack of its own — HomeView owns the stack and destinations.
 struct ListStopsView: View {
-    /// Max rows in the idle "Nearby Stops" section.
-    private static let nearbyLimit = 25
-
     @State var search = ""
     @Environment(ResourceStore<[Foli.Stop]>.self) private var stopsStore
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
@@ -59,8 +56,7 @@ struct ListStopsView: View {
                     nearbyStops.recompute(
                         stops: stops,
                         coordinate: isLocationAuthorized ? locationManager.currentLocation : nil,
-                        filter: searchFilter,
-                        limit: Self.nearbyLimit
+                        filter: searchFilter
                     )
                 }
             case .failure(let error):

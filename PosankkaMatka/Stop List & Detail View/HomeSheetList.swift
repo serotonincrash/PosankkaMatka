@@ -32,6 +32,11 @@ struct HomeSheetList: View {
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
 
+    /// Idle "Nearby Stops" rows shown before the "Show all stops" disclosure.
+    private static let nearbyLimit = 25
+    /// Whether the user expanded the idle nearby list past `nearbyLimit`.
+    @State private var showsAllNearbyStops = false
+
     var body: some View {
         Group {
             if isListEmpty {
@@ -43,13 +48,18 @@ struct HomeSheetList: View {
                             if stopRows.isEmpty {
                                 stopsDisclosure
                             } else {
-                                ForEach(stopRows) { stopWithDistance in
+                                ForEach(visibleStopRows) { stopWithDistance in
                                     Button {
                                         selectedStopID = stopWithDistance.stop.id
                                     } label: {
                                         StopRow(stopWithDistance: stopWithDistance)
                                     }
                                     .tint(.primary)
+                                }
+                                if showsNearbyDisclosure {
+                                    Button("Show all \(stopRows.count) stops") {
+                                        showsAllNearbyStops = true
+                                    }
                                 }
                             }
                         }
@@ -71,28 +81,26 @@ struct HomeSheetList: View {
         }
         .navigationTitle(Text("Föli"))
         .navigationBarTitleDisplayMode(.inline)
+        // A filter change re-scopes the list, so collapse back to the capped view
+        // rather than leaving a possibly-huge expansion open.
+        .onChange(of: searchFilter) { _, _ in
+            showsAllNearbyStops = false
+        }
         .toolbar {
             // The proximity filter only affects the nearby (idle) list and needs
             // a location to mean anything, so the control is shown only then.
             if showsFilterMenu {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button {
-                            searchFilter = .none
-                        } label: {
-                            if searchFilter == .none {
-                                Image(systemName: "checkmark").imageScale(.small)
-                            }
-                            Label("None", systemImage: "location.slash")
-                        }
-                        Section("Distance") {
-                            Picker(selection: $searchFilter) {
-                                Text("500 m").tag(SortState.proximity(500))
-                                Text("1 km").tag(SortState.proximity(1000))
-                                Text("2 km").tag(SortState.proximity(2000))
-                            } label: {
-                                Label("Filter by Proximity", systemImage: "location")
-                            }
+                        // A flat, single-select group under one header. Buttons are
+                        // used instead of a `Picker` so the options sit inline — a
+                        // `Picker` in a `Menu` nests behind its label as a submenu,
+                        // hiding the actual choices.
+                        Section("Show stops within") {
+                            distanceOption("Any distance", systemImage: "infinity", filter: .none)
+                            distanceOption("500 m", systemImage: "location", filter: .proximity(500))
+                            distanceOption("1 km", systemImage: "location", filter: .proximity(1000))
+                            distanceOption("2 km", systemImage: "location", filter: .proximity(2000))
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease.circle")
@@ -115,6 +123,19 @@ struct HomeSheetList: View {
                     || ($0.code ?? "").localizedCaseInsensitiveContains(search)
             }
             .map { StopWithDistance($0) }
+    }
+
+    /// Rows actually rendered: the idle nearby list is capped at `nearbyLimit`
+    /// until the user expands it, while a search shows every match uncapped.
+    private var visibleStopRows: [StopWithDistance] {
+        guard !isSearching else { return stopRows }
+        return showsAllNearbyStops ? stopRows : Array(stopRows.prefix(Self.nearbyLimit))
+    }
+
+    /// The idle list shows the "Show all stops" affordance only when it actually
+    /// has more stops than the cap and hasn't been expanded yet.
+    private var showsNearbyDisclosure: Bool {
+        !isSearching && !showsAllNearbyStops && stopRows.count > Self.nearbyLimit
     }
 
     /// Routes for the current mode: all (line-sorted) when idle, matches when
@@ -187,6 +208,17 @@ struct HomeSheetList: View {
     /// "500 m" / "2 km" — matches the labels used in the filter menu.
     private func formattedDistance(_ meters: Double) -> String {
         meters < 1000 ? "\(Int(meters)) m" : "\(Int(meters / 1000)) km"
+    }
+
+    /// A single-select distance option. The leading icon swaps to a checkmark when
+    /// this option is active — the system menu convention — so the row's leading
+    /// glyph stays put (no layout shift between selected and unselected states).
+    private func distanceOption(_ title: String, systemImage: String, filter: SortState) -> some View {
+        Button {
+            searchFilter = filter
+        } label: {
+            Label(title, systemImage: searchFilter == filter ? "checkmark" : systemImage)
+        }
     }
 
     // MARK: - Rows

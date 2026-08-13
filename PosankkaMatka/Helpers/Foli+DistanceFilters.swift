@@ -34,12 +34,13 @@ extension Collection where Element == Foli.Stop {
         return sorted
     }
 
-    /// The `limit` stops nearest `location`, already carrying their distances.
+    /// The stops nearest `location`, already carrying their distances, sorted
+    /// nearest-first.
     ///
     /// Replaces the previous sort → filter → re-map chain, which measured every
     /// distance `O(n log n)` times (two fresh `CLLocation` objects per
-    /// comparison) and then discarded all but the first handful. Here each stop's
-    /// distance is computed **once**, and selection is a bounded partial sort.
+    /// comparison). Here each stop's distance is computed **once**, then the
+    /// result is sorted.
     ///
     /// Also well-ordered where the old comparator was not: `sortedByDistance(to:)`
     /// returns `false` for pairs involving a stop with no coordinate, which is not
@@ -50,9 +51,7 @@ extension Collection where Element == Foli.Stop {
     /// - Parameters:
     ///   - location: The reference point, normally the user's location.
     ///   - maxDistance: Optional cutoff in meters; stops beyond it are dropped.
-    ///   - limit: Maximum number of stops to return.
     func nearest(
-        _ limit: Int,
         to location: CLLocation,
         withinMeters maxDistance: Double? = nil
     ) -> [(stop: Element, distance: Double)] {
@@ -65,25 +64,6 @@ extension Collection where Element == Foli.Stop {
             if let maxDistance, distance >= maxDistance { continue }
             measured.append((stop, distance))
         }
-        guard limit > 0 else { return [] }
-        // When the result is trimmed, a bounded insertion beats sorting everything:
-        // it keeps only `limit` candidates, so cost scales with `limit`, not with
-        // the full ~1300-stop network. (Deliberately stdlib-only — pulling in
-        // swift-algorithms for `min(count:)` isn't worth a new dependency.)
-        guard limit < measured.count else {
-            return measured.sorted { $0.distance < $1.distance }
-        }
-        var top: [(stop: Element, distance: Double)] = []
-        top.reserveCapacity(limit)
-        for candidate in measured {
-            if top.count == limit {
-                // `top` is kept sorted, so the last element is the current worst.
-                guard candidate.distance < top[limit - 1].distance else { continue }
-                top.removeLast()
-            }
-            let insertionIndex = top.firstIndex { candidate.distance < $0.distance } ?? top.count
-            top.insert(candidate, at: insertionIndex)
-        }
-        return top
+        return measured.sorted { $0.distance < $1.distance }
     }
 }

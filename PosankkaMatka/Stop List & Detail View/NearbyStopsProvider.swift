@@ -38,12 +38,10 @@ final class NearbyStopsProvider {
     ///   - stops: The full stop set.
     ///   - coordinate: The user's location, or `nil` when unavailable/unauthorized.
     ///   - filter: The active distance filter.
-    ///   - limit: Maximum rows to produce.
     func recompute(
         stops: [Foli.Stop],
         coordinate: CLLocationCoordinate2D?,
-        filter: SortState,
-        limit: Int
+        filter: SortState
     ) {
         guard needsRecompute(stopCount: stops.count, coordinate: coordinate, filter: filter) else {
             return
@@ -65,7 +63,7 @@ final class NearbyStopsProvider {
             nil
         }
         rows = stops
-            .nearest(limit, to: origin, withinMeters: maxDistance)
+            .nearest(to: origin, withinMeters: maxDistance)
             .map { StopWithDistance($0.stop, distance: $0.distance) }
     }
 
