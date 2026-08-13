@@ -9,7 +9,9 @@
 /* Begin PBXBuildFile section */
 		D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB3393007B6F200F86DBB /* FoliBusAPI */; };
 		D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB33B3007B6F200F86DBB /* FoliBusUI */; };
-		D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1C5F4F12FC8A5D200B262FA /* Forever */; };
+		D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1A8200B302DDA0800BFEC15 /* Forever */; };
+		D1FA4CCC302091830052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCB302091830052526B /* Forever */; };
+		D1FA4CCF302091ED0052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCE302091ED0052526B /* Forever */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,9 +60,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1FA4CCF302091ED0052526B /* Forever in Frameworks */,
+				D1FA4CCC302091830052526B /* Forever in Frameworks */,
 				D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */,
+				D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */,
 				D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */,
-				D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,9 +125,11 @@
 			);
 			name = PosankkaMatka;
 			packageProductDependencies = (
-				D1C5F4F12FC8A5D200B262FA /* Forever */,
 				D13DB3393007B6F200F86DBB /* FoliBusAPI */,
 				D13DB33B3007B6F200F86DBB /* FoliBusUI */,
+				D1FA4CCB302091830052526B /* Forever */,
+				D1FA4CCE302091ED0052526B /* Forever */,
+				D1A8200B302DDA0800BFEC15 /* Forever */,
 			);
 			productName = PosankkaMatka;
 			productReference = D158E60C2F833CA400DF70CE /* PosankkaMatka.app */;
@@ -183,7 +189,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					D158E60B2F833CA400DF70CE = {
 						CreatedOnToolsVersion = 26.3;
@@ -208,8 +214,8 @@
 			mainGroup = D158E6032F833CA400DF70CE;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */,
 				D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
+				D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D158E60D2F833CA400DF70CE /* Products */;
@@ -344,6 +350,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -401,6 +408,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -608,12 +616,12 @@
 				minimumVersion = 2.0.0;
 			};
 		};
-		D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */ = {
+		D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/jiachenyee/Forever";
+			repositoryURL = "https://github.com/serotonincrash/Forever";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.1.0;
+				branch = main;
+				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -629,9 +637,17 @@
 			package = D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
 			productName = FoliBusUI;
 		};
-		D1C5F4F12FC8A5D200B262FA /* Forever */ = {
+		D1A8200B302DDA0800BFEC15 /* Forever */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */;
+			package = D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */;
+			productName = Forever;
+		};
+		D1FA4CCB302091830052526B /* Forever */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Forever;
+		};
+		D1FA4CCE302091ED0052526B /* Forever */ = {
+			isa = XCSwiftPackageProductDependency;
 			productName = Forever;
 		};
 /* End XCSwiftPackageProductDependency section */
