@@ -21,6 +21,8 @@ struct MapView: View, Equatable {
     @Binding var camera: MapCameraPosition
     @Binding var selectedStopID: Foli.Stop.ID?
     let displayedStops: [Foli.Stop]
+    /// Stop IDs served by a boat route — rendered with a ferry glyph.
+    let boatStopIDs: Set<Foli.Stop.ID>
     let drawnRoutePath: [CLLocationCoordinate2D]
     let routeStart: CLLocationCoordinate2D?
     let routeEnd: CLLocationCoordinate2D?
@@ -62,10 +64,16 @@ struct MapView: View, Equatable {
                 // TODO: Finnish bus stops use distinctive real-world signage;
                 // explore representing that here (custom Annotation with a
                 // Föli-style sign glyph) instead of the generic bus icon.
-                Marker(stop.name, systemImage: "bus.fill", coordinate: coordinate)
+                Marker(stop.name, systemImage: markerSystemImage(for: stop), coordinate: coordinate)
+                    .tint(boatStopIDs.contains(stop.id) ? .blue : .red)
                     .tag(stop.id)
             }
         }
+    }
+
+    /// Marker glyph per stop: boat stops get a ferry glyph, everything else a bus.
+    private func markerSystemImage(for stop: Foli.Stop) -> String {
+        boatStopIDs.contains(stop.id) ? "ferry.fill" : "bus.fill"
     }
 
     /// A route start/end pin glyph in the route color, distinct from stop markers.
@@ -87,5 +95,6 @@ struct MapView: View, Equatable {
         lhs.routeDrawKey == rhs.routeDrawKey
             && lhs.drawnRouteColor == rhs.drawnRouteColor
             && lhs.displayedStops.map(\.id) == rhs.displayedStops.map(\.id)
+            && lhs.boatStopIDs == rhs.boatStopIDs
     }
 }

@@ -46,6 +46,8 @@ struct HomeView: View {
     /// Shared per-direction data (line + stops) and the selected direction, read
     /// by the map here and the pushed `RouteDetailList`.
     @State private var routeDetail = RouteDetailStore()
+    /// Maps stops to their vehicle mode (bus/boat) for the map markers.
+    @State private var stopTypes = StopTypeProvider()
 
     // Cached route-draw state. `mapContent` reads ONLY these (never
     // `routeDetail.selectedDirection` live), so a detent-drag body re-eval reuses
@@ -70,6 +72,7 @@ struct HomeView: View {
                 camera: $camera,
                 selectedStopID: $selectedStopID,
                 displayedStops: displayedStops,
+                boatStopIDs: stopTypes.boatStopIDs,
                 drawnRoutePath: drawnRoutePath,
                 routeStart: routeStart,
                 routeEnd: routeEnd,
@@ -117,6 +120,9 @@ struct HomeView: View {
             async let stops: Void = stopsStore.load { try await foli.fetchStops() }
             async let routes: Void = routesStore.load { try await foli.fetchRoutes() }
             _ = await (stops, routes)
+            if let routes = routesStore.state.value {
+                await stopTypes.load(routes: routes, using: foli)
+            }
             await centerOnUser()
         }
     }
