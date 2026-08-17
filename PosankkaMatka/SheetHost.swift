@@ -10,8 +10,8 @@ import Observation
 import FoliBusUI
 
 /// Shared sheet detent, owned by `HomeView`. Only `SheetHost` binds it and only
-/// framing methods read it — `body` must not, or per-drag-frame writes re-subscribe
-/// and bring back the detent hitch.
+/// framing methods read it — `body` must not, or it re-subscribes to per-drag-frame
+/// writes.
 @MainActor
 @Observable
 final class SheetModel {

@@ -29,7 +29,7 @@ struct HomeView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var visibleRegion: MKCoordinateRegion?
     /// Markers currently drawn. Recomputed only on meaningful camera changes, not
-    /// every body re-eval, so detent/inset changes don't rebuild and hitch.
+    /// every body re-eval.
     @State private var displayedStops: [Foli.Stop] = []
     /// The region that produced `displayedStops`, used to skip no-op recomputes.
     @State private var lastMarkerRegion: MKCoordinateRegion?
@@ -45,18 +45,6 @@ struct HomeView: View {
     /// Maps stops to their vehicle mode (bus/boat) for the map markers.
     @State private var stopTypes = StopTypeProvider()
 
-    // Cached route-draw state. `mapContent` reads ONLY these (never
-    // `routeDetail.selectedDirection` live), so a detent-drag body re-eval reuses
-    // stable values instead of re-diffing the polyline every frame. Updated in
-    // `updateDrawnRoute()` on real direction/route changes — same discipline as
-    // `displayedStops`.
-    @State private var drawnRoutePath: [CLLocationCoordinate2D] = []
-    @State private var routeStart: CLLocationCoordinate2D?
-    @State private var routeEnd: CLLocationCoordinate2D?
-    @State private var drawnRouteColor: Color = .accentColor
-    /// Drawn route+direction identity ("routeId:directionId"), used in MapView's `==`.
-    @State private var routeDrawKey: String?
-
     var body: some View {
         // Map + the sheet as ZStack SIBLINGS. The sheet (and its detent state)
         // lives in `SheetHost`, so drag-churn never re-evaluates this view / the
@@ -68,13 +56,9 @@ struct HomeView: View {
                 selectedStopID: $selectedStopID,
                 displayedStops: displayedStops,
                 boatStopIDs: stopTypes.boatStopIDs,
-                drawnRoutePath: drawnRoutePath,
-                routeStart: routeStart,
-                routeEnd: routeEnd,
-                drawnRouteColor: drawnRouteColor,
-                routeDrawKey: routeDrawKey
+                direction: routeDetail.selectedDirection,
+                routeColor: selectedRoute?.color ?? .accentColor
             )
-            .equatable()
             .ignoresSafeArea()
             .onMapCameraChange(frequency: .onEnd) { context in
                 visibleRegion = context.region
@@ -90,12 +74,6 @@ struct HomeView: View {
             }
             .onChange(of: selectedRoute) { _, newRoute in
                 handleRouteSelection(newRoute)
-            }
-            // Redraw the line/pins for the newly selected direction, but do NOT
-            // move the camera — a Picker switch keeps the map where it is. Camera
-            // framing happens only on the initial route open (handleRouteSelection).
-            .onChange(of: routeDetail.selectedDirectionId) { _, _ in
-                updateDrawnRoute()
             }
 
             SheetHost(
@@ -164,8 +142,7 @@ struct HomeView: View {
     /// Loads the route's per-direction data; deselecting clears it.
     private func handleRouteSelection(_ route: Foli.Route?) {
         guard let route else {
-            routeDetail.reset()
-            updateDrawnRoute()   // clears the cached line + pins
+            routeDetail.reset()   // direction becomes nil, clearing the drawn line + pins
             return
         }
         let foli = foli
@@ -175,24 +152,6 @@ struct HomeView: View {
             // the camera (only redraw the line/pins).
             frameSelectedDirection()
         }
-    }
-
-    /// Copies the drawn direction into cached `@State` so `mapContent` never reads
-    /// `routeDetail` live (avoids re-diffing on detent-drag re-evals). Call on
-    /// direction/route change.
-    private func updateDrawnRoute() {
-        guard let direction = routeDetail.selectedDirection else {
-            drawnRoutePath = []
-            routeStart = nil
-            routeEnd = nil
-            routeDrawKey = nil
-            return
-        }
-        drawnRoutePath = direction.path
-        routeStart = direction.start
-        routeEnd = direction.end
-        drawnRouteColor = selectedRoute?.color ?? .accentColor
-        routeDrawKey = "\(selectedRoute?.id ?? "")-\(direction.id)"
     }
 
     /// Frames the selected direction's path (or stop coords) in the map area above
@@ -229,7 +188,8 @@ struct HomeView: View {
     // MARK: - Helpers
 
     /// Refreshes markers for a settled region, skipping when only the inset
-    /// shifted (detent change) — the skip that removes the detent hitch.
+    /// shifted (a sheet detent change fires `onMapCameraChange` with a barely
+    /// changed region).
     private func updateDisplayedStops(for region: MKCoordinateRegion) {
         // Zoomed out past the threshold: too dense to draw/read — show none.
         guard region.span.latitudeDelta <= Self.markerThreshold else {

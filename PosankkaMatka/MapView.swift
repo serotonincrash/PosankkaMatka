@@ -9,22 +9,19 @@ import SwiftUI
 import MapKit
 import FoliBusUI
 
-/// The map surface, `Equatable` so a `HomeView.body` re-evaluation (e.g. sheet
-/// drag) doesn't re-run the `Map` content. `==` compares only rendered value
-/// inputs — not the `camera`/`selectedStopID` bindings MapKit reads live — so a
-/// detent drag skips `body`. Apply with `.equatable()`.
-struct MapView: View, Equatable {
+/// The map surface: user location, stop markers, and the selected route's
+/// polyline + start/end pins.
+struct MapView: View {
     @Binding var camera: MapCameraPosition
     @Binding var selectedStopID: Foli.Stop.ID?
     let displayedStops: [Foli.Stop]
     /// Stop IDs served by a boat route — rendered with a ferry glyph.
     let boatStopIDs: Set<Foli.Stop.ID>
-    let drawnRoutePath: [CLLocationCoordinate2D]
-    let routeStart: CLLocationCoordinate2D?
-    let routeEnd: CLLocationCoordinate2D?
-    let drawnRouteColor: Color
-    /// Drawn route+direction identity, used in `==` to trigger redraws.
-    let routeDrawKey: String?
+    /// The selected route direction (its path + start/end pins), or nil when no
+    /// route is selected.
+    let direction: RouteDirection?
+    /// The selected route's color, used for the polyline and endpoint pins.
+    let routeColor: Color
 
     var body: some View {
         Map(position: $camera, selection: $selectedStopID) {
@@ -35,18 +32,18 @@ struct MapView: View, Equatable {
 
     @MapContentBuilder
     private var mapContent: some MapContent {
-        if !drawnRoutePath.isEmpty {
-            MapPolyline(coordinates: drawnRoutePath)
-                .stroke(drawnRouteColor,
+        if let direction, !direction.path.isEmpty {
+            MapPolyline(coordinates: direction.path)
+                .stroke(routeColor,
                         style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
         }
-        if let start = routeStart {
+        if let start = direction?.start {
             Annotation("Start", coordinate: start) {
                 routeEndpointPin(systemImage: "smallcircle.filled.circle.fill")
             }
             .annotationTitles(.hidden)
         }
-        if let end = routeEnd {
+        if let end = direction?.end {
             Annotation("End", coordinate: end) {
                 routeEndpointPin(systemImage: "flag.checkered")
             }
@@ -77,19 +74,9 @@ struct MapView: View, Equatable {
             .font(.headline)
             .foregroundStyle(.white)
             .padding(8)
-            .background(drawnRouteColor, in: Circle())
+            .background(routeColor, in: Circle())
             .overlay(Circle().stroke(.white, lineWidth: 2))
             .shadow(radius: 2)
     }
 
-    // Compare only the rendered value inputs — NOT the bindings. Unchanged during
-    // a detent drag → body skipped → the Map isn't reprocessed each frame.
-    // `routeDrawKey` (the direction id that produced the path/pins) stands in for
-    // the path + start/end, which all change together with the selected direction.
-    static func == (lhs: MapView, rhs: MapView) -> Bool {
-        lhs.routeDrawKey == rhs.routeDrawKey
-            && lhs.drawnRouteColor == rhs.drawnRouteColor
-            && lhs.displayedStops.map(\.id) == rhs.displayedStops.map(\.id)
-            && lhs.boatStopIDs == rhs.boatStopIDs
-    }
 }
