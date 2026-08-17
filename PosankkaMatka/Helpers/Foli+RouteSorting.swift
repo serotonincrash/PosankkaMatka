@@ -9,10 +9,8 @@ import Foundation
 import FoliBusAPI
 
 extension Collection where Element == Foli.Route {
-    /// Sorts routes by line number the way riders read them: 1, 2, 2a, 15, 100 —
-    /// primarily by the leading integer of `shortName`, with the full string as a
-    /// tiebreaker (so "2" precedes "2a"). Routes whose `shortName` has no leading
-    /// digits sort after numbered ones, alphabetically.
+    /// Sorts by the leading integer of `shortName` (full string as tiebreaker);
+    /// non-numeric names sort last, alphabetically.
     func sortedByLine() -> [Foli.Route] {
         sorted { lhs, rhs in
             let l = Self.leadingNumber(lhs.shortName)

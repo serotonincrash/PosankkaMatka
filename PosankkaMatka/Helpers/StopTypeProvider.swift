@@ -8,15 +8,9 @@
 import Observation
 import FoliBusUI
 
-/// Determines each stop's vehicle mode so the map can show the right marker
-/// (bus vs. boat).
-///
-/// GTFS doesn't put a vehicle type on stops — it lives on routes (`route_type`,
-/// where `3` = bus and `4` = ferry/boat). A stop is a boat stop when it's served
-/// by at least one ferry route, so this walks ferry routes → their trips → their
-/// stop times to collect the affected stop IDs. With Föli's two ferry routes that
-/// is a handful of requests, run once off the `body` path (and then served from
-/// the client's cache on any later call).
+/// Maps stops to their vehicle mode (bus vs. boat). GTFS puts the type on routes
+/// (`route_type`: 3 = bus, 4 = ferry), so a stop is a boat stop when served by a
+/// ferry route — this walks ferry routes → trips → stop times to find those IDs.
 @MainActor
 @Observable
 final class StopTypeProvider {
@@ -26,10 +20,7 @@ final class StopTypeProvider {
     /// GTFS `route_type` for ferry / water-bus services.
     private static let ferryRouteType = 4
 
-    /// Collects the IDs of every stop served by a ferry route.
-    ///
-    /// Failures are per-request and non-fatal: a trip whose stop times can't be
-    /// fetched is simply skipped, leaving the default (bus) marker for its stops.
+    /// Collects stops served by ferry routes; failures skip a trip (bus fallback).
     func load(routes: [Foli.Route], using foli: FoliService) async {
         let ferryRouteIDs = routes.filter { $0.type == Self.ferryRouteType }.map(\.id)
         guard !ferryRouteIDs.isEmpty else { return }

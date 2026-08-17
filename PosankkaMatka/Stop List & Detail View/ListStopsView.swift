@@ -1,6 +1,6 @@
 //
-//  ContentView.swift
-//  FoliAPITestApp
+//  ListStopsView.swift
+//  PosankkaMatka
 //
 //  Created by sero on 25/2/26.
 //
@@ -10,9 +10,8 @@ import FoliBusUI
 import CoreLocation
 import Forever
 
-/// Hosts the combined home-sheet list (nearby stops + routes) with search and the
-/// distance filter. Reads both resource stores from the environment; it has no
-/// NavigationStack of its own — HomeView owns the stack and destinations.
+/// The home-sheet list (nearby stops + routes) with search and the distance
+/// filter. Reads resource stores from the environment; HomeView owns the stack.
 struct ListStopsView: View {
     @State var search = ""
     @Environment(ResourceStore<[Foli.Stop]>.self) private var stopsStore
@@ -24,9 +23,7 @@ struct ListStopsView: View {
     /// Authorization, read from observable state instead of calling into
     /// `CLLocationManager` from a `body`.
     private var isLocationAuthorized: Bool { locationManager.isAuthorized }
-    /// Persisted distance filter. `Forever` is backed by an in-memory
-    /// `@Observable` store, so reading this in `body` is cheap and registers
-    /// correct change tracking; writes funnel through `set` (persist + publish).
+    /// Persisted distance filter (cheap to read in `body`; writes persist + publish).
     @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
 
     @Binding var selectedStopID: Foli.Stop.ID?
@@ -65,9 +62,8 @@ struct ListStopsView: View {
         }
     }
 
-    /// Identity of the inputs to the nearby computation. Coordinates are rounded
-    /// so sub-meter GPS jitter doesn't retrigger the recompute; the filter is
-    /// included so a change re-runs the task.
+    /// Task identity for the nearby inputs; coordinates are rounded so sub-meter
+    /// GPS jitter doesn't retrigger the recompute.
     private func nearbyInputs(_ stops: [Foli.Stop]) -> String {
         let coordinate = isLocationAuthorized ? locationManager.currentLocation : nil
         let latitude = coordinate.map { ($0.latitude * 100_000).rounded() } ?? 0

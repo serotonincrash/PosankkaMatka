@@ -9,18 +9,8 @@ import CoreLocation
 import Observation
 import FoliBusUI
 
-/// Computes the "Nearby Stops" rows outside of any `body`.
-///
-/// This work used to run inline in `HomeSheetList.body`: a full sort of every stop
-/// by id, then a distance sort allocating two `CLLocation` objects per comparison,
-/// then a distance filter, and finally `.prefix(25)` — throwing away nearly all of
-/// it. Because `body` re-evaluated many times per navigation (measured: 15 passes
-/// for one stop push+pop), that whole chain ran on each pass.
-///
-/// Here it runs only when an input actually changes, and `HomeSheetList` receives
-/// a finished array. `recompute(...)` is deliberately explicit rather than a
-/// computed property so callers control *when* it runs — a computed property read
-/// from `body` would reintroduce the original problem.
+/// Computes nearby rows off the `body` path, only when an input changes;
+/// `recompute` is explicit so callers control when it runs.
 @MainActor
 @Observable
 final class NearbyStopsProvider {
@@ -32,12 +22,7 @@ final class NearbyStopsProvider {
     private var lastFilter: SortState?
     private var lastCoordinate: CLLocationCoordinate2D?
 
-    /// Recomputes `rows` if any input changed since the last run.
-    ///
-    /// - Parameters:
-    ///   - stops: The full stop set.
-    ///   - coordinate: The user's location, or `nil` when unavailable/unauthorized.
-    ///   - filter: The active distance filter.
+    /// Recomputes `rows` when an input changed.
     func recompute(
         stops: [Foli.Stop],
         coordinate: CLLocationCoordinate2D?,

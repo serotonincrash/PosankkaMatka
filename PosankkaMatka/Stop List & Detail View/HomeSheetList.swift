@@ -1,5 +1,5 @@
 //
-//  SearchList.swift
+//  HomeSheetList.swift
 //  PosankkaMatka
 //
 //  Created by sero on 8/4/26.
@@ -9,23 +9,19 @@ import SwiftUI
 import UIKit
 import FoliBusUI
 
-/// The combined home-sheet list: "Nearby Stops" and "Routes" in one map-backed
-/// sheet (à la Maps). Both idle and search states render sections for each type;
-/// tapping a stop or a route sets the shared selection the map reacts to.
+/// The home-sheet list: "Nearby Stops" and "Routes". Tapping a row sets the shared
+/// selection the map reacts to.
 struct HomeSheetList: View {
     @Environment(\.isSearching) var isSearching
 
-    /// Current search text. Read-only here — `.searchable` on the parent owns the write.
+    /// Search text (read-only; `.searchable` owns the write).
     let search: String
     let stops: [Foli.Stop]
     let routes: [Foli.Route]
-    /// Precomputed nearby rows (see `NearbyStopsProvider`). Passed in rather than
-    /// derived here so `body` stays pure rendering. Empty when there's no location
-    /// or when the proximity filter excludes everything — `stopsDisclosure` covers
-    /// both cases so the section never vanishes silently.
+    /// Precomputed nearby rows (see `NearbyStopsProvider`); empty cases are
+    /// disclosed by `stopsDisclosure` so the section never vanishes silently.
     let nearbyStops: [StopWithDistance]
-    /// Whether location is authorized — resolved once by the parent instead of
-    /// calling into `LocationManager` from `body`.
+    /// Whether location is authorized (resolved by the parent).
     let isLocationAuthorized: Bool
     /// Distance filter, bound to the persisted `@Forever` value in the parent.
     @Binding var searchFilter: SortState
@@ -34,7 +30,6 @@ struct HomeSheetList: View {
 
     /// Idle "Nearby Stops" rows shown before the "Show all stops" disclosure.
     private static let nearbyLimit = 25
-    /// Whether the user expanded the idle nearby list past `nearbyLimit`.
     @State private var showsAllNearbyStops = false
 
     var body: some View {
@@ -112,8 +107,7 @@ struct HomeSheetList: View {
 
     // MARK: - Derived rows
 
-    /// Stops for the current mode: nearby rows when idle, name/code matches when
-    /// searching (no distances — proximity is irrelevant to a text search).
+    /// Nearby rows when idle, name/code matches when searching.
     private var stopRows: [StopWithDistance] {
         guard isSearching else { return nearbyStops }
         guard !search.isEmpty else { return [] }
@@ -125,21 +119,18 @@ struct HomeSheetList: View {
             .map { StopWithDistance($0) }
     }
 
-    /// Rows actually rendered: the idle nearby list is capped at `nearbyLimit`
-    /// until the user expands it, while a search shows every match uncapped.
+    /// Rendered rows: nearby is capped at `nearbyLimit` until expanded; search is uncapped.
     private var visibleStopRows: [StopWithDistance] {
         guard !isSearching else { return stopRows }
         return showsAllNearbyStops ? stopRows : Array(stopRows.prefix(Self.nearbyLimit))
     }
 
-    /// The idle list shows the "Show all stops" affordance only when it actually
-    /// has more stops than the cap and hasn't been expanded yet.
+    /// True when the idle list has more than the cap and isn't expanded.
     private var showsNearbyDisclosure: Bool {
         !isSearching && !showsAllNearbyStops && stopRows.count > Self.nearbyLimit
     }
 
-    /// Routes for the current mode: all (line-sorted) when idle, matches when
-    /// searching. Empty while search is active but the field is blank.
+    /// All (line-sorted) routes when idle, matches when searching.
     private var routeRows: [Foli.Route] {
         let sorted = routes.sortedByLine()
         guard isSearching else { return sorted }
@@ -150,13 +141,11 @@ struct HomeSheetList: View {
         }
     }
 
-    /// The full-sheet empty state fires only for a text search with no matches
-    /// anywhere; idle always renders the list — an empty nearby set is disclosed
-    /// in place by `stopsDisclosure` rather than blanking the whole sheet.
+    /// Full-sheet empty state fires only for a search with no matches; idle always
+    /// renders the list.
     private var isListEmpty: Bool { isSearching && stopRows.isEmpty && routeRows.isEmpty }
 
-    /// In search, show the stops section only if it has matches; in idle it
-    /// always shows (rows, or a disclosure explaining the empty state).
+    /// Search shows the stops section only with matches; idle always shows it.
     private var showsStopsSection: Bool { isSearching ? !stopRows.isEmpty : true }
 
     private var stopSectionTitle: String { isSearching ? "Stops" : "Nearby Stops" }
@@ -176,9 +165,7 @@ struct HomeSheetList: View {
         }
     }
 
-    /// Inline message shown inside the stops section when it has no rows (idle
-    /// only — a search with no stop matches simply omits the section). Discloses
-    /// *why* it's empty and offers the recovery action.
+    /// Inline message when the idle stops section is empty; discloses why and offers recovery.
     @ViewBuilder
     private var stopsDisclosure: some View {
         if !isLocationAuthorized {
@@ -210,9 +197,7 @@ struct HomeSheetList: View {
         meters < 1000 ? "\(Int(meters)) m" : "\(Int(meters / 1000)) km"
     }
 
-    /// A single-select distance option. The leading icon swaps to a checkmark when
-    /// this option is active — the system menu convention — so the row's leading
-    /// glyph stays put (no layout shift between selected and unselected states).
+    /// A single-select distance option; the leading icon becomes a checkmark when active.
     private func distanceOption(_ title: String, systemImage: String, filter: SortState) -> some View {
         Button {
             searchFilter = filter

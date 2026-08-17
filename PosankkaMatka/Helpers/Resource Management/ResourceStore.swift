@@ -8,18 +8,10 @@
 import Observation
 import FoliBusUI
 
-/// A generic, observable owner of one async-loaded resource.
-///
-/// The store owns three things: the ``ResourceState``, the fetch operation, and
-/// the error mapping. It intentionally owns no domain logic — no filtering,
-/// sorting, caching, or request deduplication. FoliBusAPI's client already
-/// deduplicates concurrent identical requests (`FoliDedup`), so the store stays
-/// a thin UI-state adapter.
-///
-/// The fetch operation is supplied per call rather than at `init`, because
-/// `@FoliService` only resolves its client once installed in the view
-/// hierarchy — so views pass the fetch from within `.task`/`.refreshable`,
-/// where `foli` is valid.
+/// A generic, observable owner of one async-loaded resource — `ResourceState`,
+/// the fetch, and error mapping; no domain logic (the client handles caching and
+/// dedup). The fetch is supplied per call because `@FoliService` only resolves
+/// once installed, so views pass it from `.task`/`.refreshable`.
 @MainActor
 @Observable
 final class ResourceStore<T> {
@@ -27,15 +19,13 @@ final class ResourceStore<T> {
 
     private(set) var state: ResourceState<T> = .loading
 
-    /// Fetches only if not already loaded. Intended for `.task`, which re-runs
-    /// each time a view appears — an already-loaded resource is not re-fetched.
+    /// Fetches only if not loaded (for `.task`, which re-runs on appear).
     func load(_ fetch: @escaping Fetch) async {
         if case .success = state { return }
         await run(fetch, resetToLoading: true)
     }
 
-    /// Always fetches, keeping any current value visible while it runs.
-    /// Intended for `.refreshable`. A failed refresh preserves existing data.
+    /// Always fetches (for `.refreshable`); keeps the current value on failure.
     func refresh(_ fetch: @escaping Fetch) async {
         await run(fetch, resetToLoading: false)
     }

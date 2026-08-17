@@ -8,15 +8,12 @@
 import SwiftUI
 import FoliBusUI
 
-/// A compact colored badge showing a route's line number, using the route's own
-/// GTFS colors. Fixed to a three-character width so badges align across rows
-/// whether the line is "1", "15", or "180".
+/// A route's colored line-number badge (route's GTFS colors), fixed to a
+/// three-character width.
 struct RouteBadge: View {
     let route: Foli.Route
 
-    /// Monospaced, so a fixed three-glyph width is meaningful; shared by the
-    /// hidden reference and the visible text so both measure identically (and
-    /// scale together with Dynamic Type).
+    /// Shared monospaced font, so the hidden reference and visible text measure identically.
     private var badgeFont: Font { .subheadline.weight(.bold).monospaced() }
 
     var body: some View {

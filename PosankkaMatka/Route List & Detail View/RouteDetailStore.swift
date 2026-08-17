@@ -9,18 +9,13 @@ import CoreLocation
 import Observation
 import FoliBusUI
 
-/// Shared state for a selected route's detail: the per-direction data (each
-/// direction's ordered stops AND its polyline path, joined via the trip that
-/// carries both `directionId` and `shapeId`) plus the currently shown direction.
-/// Owned by `HomeView`, read by the map and the pushed list so one
-/// `selectedDirectionId` drives the drawn line, the start/end pins, the camera,
-/// and the stop list together.
+/// Shared selected-route detail: per-direction stops + polyline (joined via the
+/// trip carrying both `directionId` and `shapeId`) and the shown direction. One
+/// `selectedDirectionId` drives the map line, pins, camera, and stop list.
 @MainActor
 @Observable
 final class RouteDetailStore {
-    /// Loading/success/failure for the joined per-direction data. Replaced with a
-    /// fresh store per route so a route switch clears the previous route's data
-    /// (back to `.loading`) immediately rather than lingering.
+    /// Per-direction data; a fresh store per route clears stale data to `.loading`.
     private(set) var directions = ResourceStore<[RouteDirection]>()
     /// The direction currently shown across map + list.
     var selectedDirectionId: Int?
@@ -30,9 +25,7 @@ final class RouteDetailStore {
         allDirections.first { $0.id == selectedDirectionId }
     }
 
-    /// Fetches the route's directions — joining stops and shape path per direction
-    /// — and defaults the selection to the first direction. Resets first so a new
-    /// route doesn't briefly show the previous one's data.
+    /// Loads directions and selects the first; resets first so a new route doesn't flash the old one.
     func load(routeId: String, using foli: FoliService) async {
         selectedDirectionId = nil
         directions = ResourceStore<[RouteDirection]>()  // fresh → clears prior route, back to .loading
@@ -44,9 +37,7 @@ final class RouteDetailStore {
         selectedDirectionId = nil
     }
 
-    /// route → per-direction (stops + path). For each direction a representative
-    /// trip yields both its ordered stops (via stop times) and its polyline (via
-    /// the trip's shape), fetched concurrently.
+    /// route → per-direction stops + path; one representative trip per direction yields both, fetched concurrently.
     private static func fetch(routeId: String, using foli: FoliService) -> @Sendable () async throws -> [RouteDirection] {
         return {
             let trips = try await foli.fetchTrips(forRoute: routeId)

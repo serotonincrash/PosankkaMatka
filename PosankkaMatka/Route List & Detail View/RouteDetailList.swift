@@ -8,11 +8,9 @@
 import SwiftUI
 import FoliBusUI
 
-/// The pushed detail for a selected route: a direction Picker pinned above the
-/// stops of the currently selected direction. The route's line and start/end
-/// pins are drawn on the shared home map by `HomeView`; the shared
-/// `RouteDetailStore` (loaded by HomeView) is the single source of truth, so the
-/// Picker drives the map and this list together. Tapping a stop opens it.
+/// The pushed route detail: a direction Picker above the selected direction's
+/// stops. `RouteDetailStore` is the shared source of truth, so the Picker drives
+/// the map and this list together.
 struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?

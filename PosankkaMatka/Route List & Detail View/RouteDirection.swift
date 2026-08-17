@@ -8,9 +8,7 @@
 import CoreLocation
 import FoliBusUI
 
-/// One direction of a route: its GTFS `directionId`, the trip headsign that names
-/// it (e.g. "Kauppatori"), the ordered stops served, and the polyline path for
-/// that direction's representative shape.
+/// One direction of a route: `directionId`, headsign, ordered stops, and its shape path.
 struct RouteDirection: Identifiable {
     let id: Int          // directionId (0 / 1)
     let headsign: String

@@ -6,10 +6,11 @@
 //
 
 
+/// The distance cutoff for the idle "Nearby Stops" list.
 enum SortState: Hashable, Codable {
-    /// Filter stops out based on proximity in meters
+    /// Only stops within this many meters of the user.
     case proximity(Double)
     
-    /// Show all stops
+    /// No distance cutoff — every stop, nearest first.
     case none
 }

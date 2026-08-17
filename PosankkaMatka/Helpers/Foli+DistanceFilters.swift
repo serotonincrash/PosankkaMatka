@@ -34,23 +34,8 @@ extension Collection where Element == Foli.Stop {
         return sorted
     }
 
-    /// The stops nearest `location`, already carrying their distances, sorted
-    /// nearest-first.
-    ///
-    /// Replaces the previous sort → filter → re-map chain, which measured every
-    /// distance `O(n log n)` times (two fresh `CLLocation` objects per
-    /// comparison). Here each stop's distance is computed **once**, then the
-    /// result is sorted.
-    ///
-    /// Also well-ordered where the old comparator was not: `sortedByDistance(to:)`
-    /// returns `false` for pairs involving a stop with no coordinate, which is not
-    /// a strict weak ordering and left such stops in unpredictable positions.
-    /// Stops without a coordinate are excluded outright — they have no distance to
-    /// rank by, and the nearby list exists to answer "what's close to me".
-    ///
-    /// - Parameters:
-    ///   - location: The reference point, normally the user's location.
-    ///   - maxDistance: Optional cutoff in meters; stops beyond it are dropped.
+    /// The stops nearest to `location`, with distances, sorted nearest-first. Each
+    /// distance is computed once; stops without a coordinate are excluded.
     func nearest(
         to location: CLLocation,
         withinMeters maxDistance: Double? = nil

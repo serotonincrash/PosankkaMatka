@@ -9,36 +9,26 @@ import SwiftUI
 import Observation
 import FoliBusUI
 
-/// Shared sheet state. Holds `selectedDetent` so both `SheetHost` (which binds
-/// the sheet's `selection:` to it) and `HomeView` (which reads it — in a method,
-/// never in `body` — to frame routes above the sheet) see one source of truth.
-///
-/// Owned by `HomeView` as `@State`. IMPORTANT: `HomeView.body` must not read
-/// `selectedDetent`, or it would re-subscribe to the per-drag-frame writes and
-/// bring back the detent hitch. Only `SheetHost` binds it and only framing
-/// methods read it (at call time, on discrete events).
+/// Shared sheet detent, owned by `HomeView`. Only `SheetHost` binds it and only
+/// framing methods read it — `body` must not, or per-drag-frame writes re-subscribe
+/// and bring back the detent hitch.
 @MainActor
 @Observable
 final class SheetModel {
     var selectedDetent: PresentationDetent = .medium
 }
 
-/// Hosts the persistent home sheet **in isolation from the map**. Owning
-/// `selectedDetent` here (instead of on `HomeView`) means the continuous
-/// `presentationDetents(selection:)` writes during a sheet drag invalidate only
-/// this trivial `Color.clear` view — not `HomeView`, which renders the live Map.
-/// That's what removes the detent-drag hitch.
-///
-/// `presentationBackgroundInteraction` is host-controller-wide, so the map (a
-/// ZStack sibling of this view in `HomeView`) stays undimmed and interactive
-/// behind the sheet even though it isn't this view's own content.
+/// Hosts the persistent home sheet in isolation from the map, so sheet-drag detent
+/// writes invalidate only this trivial view — not `HomeView`, which renders the
+/// live map. The map (a ZStack sibling) stays undimmed behind the sheet via
+/// host-wide `presentationBackgroundInteraction`.
 struct SheetHost: View {
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
     @Binding var stop: StopWithDistance?
-    /// Whether a detail is shown (computed on HomeView); drives the detent raise.
+    /// Whether a detail is shown; drives the detent raise.
     let showingDetail: Bool
-    /// Shared detent state (owned by HomeView). SheetHost binds the sheet to it.
+    /// Shared detent state, bound to the sheet.
     @Bindable var sheetModel: SheetModel
 
     var body: some View {

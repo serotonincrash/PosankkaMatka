@@ -13,14 +13,12 @@ import FoliBusUI
 struct HomeView: View {
     /// Initial span when centering on the user's location.
     private static let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-    /// Latitude span (degrees) at or below which markers are shown. When zoomed
-    /// out past this the region holds too many stops to draw or read, so the map
-    /// shows none until the user zooms in. A stop is simply in-view-and-zoomed-in
-    /// or not — no per-pan ranking, so markers don't churn while panning.
+    /// Span (degrees) at or below which markers show; further out the map draws
+    /// none. Membership is purely in-view-and-zoomed-in, so markers don't churn
+    /// while panning.
     private static let markerThreshold: CLLocationDegrees = 0.06
-    /// Span the camera snaps to when selecting a stop while zoomed out past the
-    /// marker threshold — street level, showing the stop and its immediate
-    /// surrounding streets/nearby stops.
+    /// Span the camera snaps to when a stop is selected while zoomed out — street
+    /// level.
     private static let selectionSpan = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
 
     @State private var locationManager = LocationManager()
@@ -30,17 +28,15 @@ struct HomeView: View {
 
     @State private var camera: MapCameraPosition = .automatic
     @State private var visibleRegion: MKCoordinateRegion?
-    /// The markers currently drawn. Recomputed only when the region meaningfully
-    /// changes (see `onMapCameraChange`), NOT on every `body` re-eval — so a
-    /// detent/inset change doesn't rebuild hundreds of markers and hitch.
+    /// Markers currently drawn. Recomputed only on meaningful camera changes, not
+    /// every body re-eval, so detent/inset changes don't rebuild and hitch.
     @State private var displayedStops: [Foli.Stop] = []
     /// The region that produced `displayedStops`, used to skip no-op recomputes.
     @State private var lastMarkerRegion: MKCoordinateRegion?
     @State private var selectedStopID: Foli.Stop.ID?
     @State private var stop: StopWithDistance?
-    /// Shared sheet detent. Owned here, bound by `SheetHost`, and read by route
-    /// framing (in methods only — NEVER in `body`, which would re-subscribe to
-    /// per-drag-frame writes and bring back the detent hitch).
+    /// Shared sheet detent, bound by `SheetHost`. Read only in framing methods —
+    /// never `body`, which would re-subscribe to per-drag writes.
     @State private var sheetModel = SheetModel()
     @State private var selectedRoute: Foli.Route?
     /// Shared per-direction data (line + stops) and the selected direction, read
@@ -58,8 +54,7 @@ struct HomeView: View {
     @State private var routeStart: CLLocationCoordinate2D?
     @State private var routeEnd: CLLocationCoordinate2D?
     @State private var drawnRouteColor: Color = .accentColor
-    /// Identity of the drawn route+direction ("routeId:directionId", nil = none);
-    /// MapView uses it in `==` to detect when the drawn line must change.
+    /// Drawn route+direction identity ("routeId:directionId"), used in MapView's `==`.
     @State private var routeDrawKey: String?
 
     var body: some View {
@@ -135,13 +130,10 @@ struct HomeView: View {
 
     // MARK: - Selection
 
-    /// Tapping a stop opens its `StopView`, keeps the marker highlighted,
-    /// recenters the map on it (keeping the current zoom), and raises the sheet
-    /// to `.medium` so the detail isn't obscured at the peek. The target is
-    /// nudged south so the stop lands in the visible strip above the sheet — the
-    /// map carries no sheet inset (that caused a detent hitch), so we offset only
-    /// here, once. `selectedStopID` is *not* cleared here (that would drop the
-    /// highlight); it's cleared in `onChange(of: stop)` when the user returns.
+    /// Opens the stop's detail: highlight + recenter (keeping zoom), nudged south
+    /// so it sits above the sheet, and raise to `.medium`. `selectedStopID` is
+    /// cleared in `onChange(of: stop)` on return, not here (which would drop the
+    /// highlight).
     private func handleStopSelection(_ newValue: Foli.Stop.ID?) {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
@@ -169,8 +161,7 @@ struct HomeView: View {
     /// Whether a detail (stop or route) is currently pushed — drives the detent.
     private var showingDetail: Bool { stop != nil || selectedRoute != nil }
 
-    /// Selecting a route loads its per-direction data (the map draws the selected
-    /// direction; framing follows `selectedDirectionId`). Deselecting clears it.
+    /// Loads the route's per-direction data; deselecting clears it.
     private func handleRouteSelection(_ route: Foli.Route?) {
         guard let route else {
             routeDetail.reset()
@@ -186,9 +177,9 @@ struct HomeView: View {
         }
     }
 
-    /// Copies the selected direction's path/endpoints/color into cached `@State`
-    /// so `mapContent` never reads `routeDetail` live (avoids re-diffing the
-    /// polyline on detent-drag body re-evals). Call on direction/route change.
+    /// Copies the drawn direction into cached `@State` so `mapContent` never reads
+    /// `routeDetail` live (avoids re-diffing on detent-drag re-evals). Call on
+    /// direction/route change.
     private func updateDrawnRoute() {
         guard let direction = routeDetail.selectedDirection else {
             drawnRoutePath = []
@@ -204,11 +195,8 @@ struct HomeView: View {
         routeDrawKey = "\(selectedRoute?.id ?? "")-\(direction.id)"
     }
 
-    /// Frames the camera on the currently selected direction's path (falling back
-    /// to its stop coordinates if the shape is unavailable), offset so the route
-    /// sits in the map area VISIBLE above the sheet at the current detent — not
-    /// centered behind it. Driven by `selectedDirectionId` (initial load + Picker
-    /// changes). Reads `sheetModel.selectedDetent` here (a method, not `body`).
+    /// Frames the selected direction's path (or stop coords) in the map area above
+    /// the sheet at the current detent — not centered behind it.
     private func frameSelectedDirection() {
         guard let direction = routeDetail.selectedDirection else { return }
         let coords = direction.path.isEmpty
@@ -240,10 +228,8 @@ struct HomeView: View {
 
     // MARK: - Helpers
 
-    /// Refreshes `displayedStops` for a settled camera region, but skips work
-    /// when nothing meaningful changed — specifically when only the map inset
-    /// shifted (detent change), which fires `onMapCameraChange` with an
-    /// essentially unchanged region. That skip is what removes the detent hitch.
+    /// Refreshes markers for a settled region, skipping when only the inset
+    /// shifted (detent change) — the skip that removes the detent hitch.
     private func updateDisplayedStops(for region: MKCoordinateRegion) {
         // Zoomed out past the threshold: too dense to draw/read — show none.
         guard region.span.latitudeDelta <= Self.markerThreshold else {
@@ -259,10 +245,9 @@ struct HomeView: View {
         lastMarkerRegion = region
     }
 
-    /// Stops within the visible region's bounding box. No cap or ranking — this
-    /// is only called when zoomed in past `markerThreshold`, which bounds the
-    /// count, and membership depends only on the region (not a center-relative
-    /// ranking), so markers stay stable while panning.
+    /// Stops within the region's bounding box. Called only past `markerThreshold`
+    /// (so the count is bounded); membership depends only on the region, keeping
+    /// markers stable while panning.
     private func stopsInRegion(_ region: MKCoordinateRegion) -> [Foli.Stop] {
         let latRange = (region.center.latitude - region.span.latitudeDelta / 2)
             ... (region.center.latitude + region.span.latitudeDelta / 2)
@@ -271,12 +256,8 @@ struct HomeView: View {
         return allStops.within(latRange: latRange, lonRange: lonRange)
     }
 
-    /// Center the camera on the user's location once it's available.
-    ///
-    /// `LocationManager.currentLocation` is `@ObservationIgnored` and populates
-    /// asynchronously after authorization, so it may still be `nil` on first
-    /// appear. We poll briefly for it rather than reading once. This only sets
-    /// the *initial* camera — the map doesn't live-recenter as the user moves.
+    /// Centers the initial camera on the user once a fix arrives (polled briefly,
+    /// since `currentLocation` populates async). The map doesn't live-recenter.
     private func centerOnUser() async {
         guard locationManager.checkLocationAuthorization() else { return }
         for _ in 0..<20 {
@@ -314,9 +295,8 @@ private extension MKCoordinateRegion {
         self.init(center: center, span: span)
     }
 
-    /// Whether two regions are close enough to treat as the same view — used to
-    /// skip marker recomputes triggered by inset changes rather than real pans.
-    /// Epsilon is a fraction of the current span, so it scales with zoom.
+    /// True when two regions are close enough to skip a marker recompute. Epsilon
+    /// scales with the span.
     func isApproximatelyEqual(to other: MKCoordinateRegion) -> Bool {
         let latEps = span.latitudeDelta * 0.05
         let lonEps = span.longitudeDelta * 0.05

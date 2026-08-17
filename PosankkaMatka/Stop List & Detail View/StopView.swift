@@ -1,5 +1,5 @@
 //
-//  TestStopView.swift
+//  StopView.swift
 //  PosankkaMatka
 //
 //  Created by sero on 6/4/26.
@@ -66,11 +66,8 @@ struct StopView: View {
         return { try await foli.fetchArrivals(for: stopId) }
     }
 
-    /// Resolves the route serving an arrival from its public line reference.
-    ///
-    /// `Foli.Arrival.lineRef` is the line number, which equals `Foli.Route.shortName`
-    /// (Föli short names are unique). Returns `nil` before routes load or when no
-    /// route matches, in which case the row falls back to the plain line text.
+    /// The route serving an arrival (`lineRef` == `route.shortName`); `nil` until
+    /// routes load or when unmatched, falling back to plain line text.
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
