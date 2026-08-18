@@ -57,7 +57,9 @@ struct HomeView: View {
                 displayedStops: displayedStops,
                 boatStopIDs: stopTypes.boatStopIDs,
                 direction: routeDetail.selectedDirection,
-                routeColor: selectedRoute?.color ?? .accentColor
+                routeColor: selectedRoute?.color ?? .accentColor,
+                isZoomedIn: isZoomedIn,
+                routeIsSelected: selectedRoute != nil
             )
             .ignoresSafeArea()
             .onMapCameraChange(frequency: .onEnd) { context in
@@ -74,6 +76,15 @@ struct HomeView: View {
             }
             .onChange(of: selectedRoute) { _, newRoute in
                 handleRouteSelection(newRoute)
+            }
+            // Keep the selection framed in the visible area above the sheet when
+            // the detent changes. A pushed stop wins over a route.
+            .onChange(of: sheetModel.selectedDetent) { _, _ in
+                if let coordinate = stop?.stop.location?.toCLCoordinate() {
+                    frameSelectedStop(at: coordinate)
+                } else {
+                    frameSelectedDirection()
+                }
             }
 
             SheetHost(
@@ -106,32 +117,25 @@ struct HomeView: View {
         stopsStore.state.value ?? []
     }
 
+    /// Whether the camera is zoomed in past `markerThreshold` (detailed markers show).
+    /// Derived from `visibleRegion` so it also tracks programmatic camera moves.
+    private var isZoomedIn: Bool {
+        guard let span = visibleRegion?.span.latitudeDelta else { return false }
+        return span <= Self.markerThreshold
+    }
+
     // MARK: - Selection
 
-    /// Opens the stop's detail: highlight + recenter (keeping zoom), nudged south
-    /// so it sits above the sheet, and raise to `.medium`. `selectedStopID` is
-    /// cleared in `onChange(of: stop)` on return, not here (which would drop the
-    /// highlight).
+    /// Opens the stop's detail and frames it in the visible area above the sheet.
+    /// `selectedStopID` is cleared in `onChange(of: stop)` on return, not here
+    /// (which would drop the highlight).
     private func handleStopSelection(_ newValue: Foli.Stop.ID?) {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
-        // Preserve a deliberate close zoom (already within the marker threshold),
-        // but snap to a fixed level when zoomed out — otherwise recentering at a
-        // wide span leaves the selected stop with no visible markers.
-        let currentSpan = visibleRegion?.span ?? Self.defaultSpan
-        let span = currentSpan.latitudeDelta <= Self.markerThreshold ? currentSpan : Self.selectionSpan
-        // Shift the center south by a quarter-span so the stop sits above the
-        // (roughly half-screen) sheet when it's expanded.
-        let center = CLLocationCoordinate2D(
-            latitude: coordinate.latitude - span.latitudeDelta * 0.25,
-            longitude: coordinate.longitude
-        )
-        // Animate the camera move on its own transaction so the concurrent
-        // navigation push / detent change don't cause MapKit to skip it.
-        withAnimation(.easeInOut(duration: 0.4)) {
-            camera = .region(MKCoordinateRegion(center: center, span: span))
-        }
+        // Recenter BEFORE pushing the detail: the concurrent navigation push can
+        // otherwise make MapKit skip the camera animation and drop the zoom.
+        frameSelectedStop(at: coordinate)
         // Detent raise is centralized in `.onChange(of: showingDetail)`.
         stop = StopWithDistance(found)
     }
@@ -154,10 +158,30 @@ struct HomeView: View {
         }
     }
 
+    /// Frames a stop in the map area above the sheet, keeping a deliberate close
+    /// zoom or snapping to street level when zoomed out.
+    private func frameSelectedStop(at coordinate: CLLocationCoordinate2D) {
+        let currentSpan = visibleRegion?.span ?? Self.defaultSpan
+        let span = currentSpan.latitudeDelta <= Self.markerThreshold ? currentSpan : Self.selectionSpan
+        // Shift the center south so the stop sits in the visible area above the
+        // sheet, using the detent's visible fraction.
+        let nudge = (1 - visibleFraction(for: sheetModel.selectedDetent)) / 2
+        let center = CLLocationCoordinate2D(
+            latitude: coordinate.latitude - span.latitudeDelta * nudge,
+            longitude: coordinate.longitude
+        )
+        let region = MKCoordinateRegion(center: center, span: span)
+        visibleRegion = region
+        withAnimation(.easeInOut(duration: 0.4)) {
+            camera = .region(region)
+        }
+    }
+
     /// Frames the selected direction's path (or stop coords) in the map area above
     /// the sheet at the current detent — not centered behind it.
     private func frameSelectedDirection() {
-        guard let direction = routeDetail.selectedDirection else { return }
+        // A pushed stop wins: never re-frame the route over it.
+        guard stop == nil, let direction = routeDetail.selectedDirection else { return }
         let coords = direction.path.isEmpty
             ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
             : direction.path
@@ -176,6 +200,7 @@ struct HomeView: View {
             ),
             span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: region.span.longitudeDelta)
         )
+        visibleRegion = framed
         withAnimation { camera = .region(framed) }
     }
 
@@ -191,8 +216,9 @@ struct HomeView: View {
     /// shifted (a sheet detent change fires `onMapCameraChange` with a barely
     /// changed region).
     private func updateDisplayedStops(for region: MKCoordinateRegion) {
+        let zoomedIn = region.span.latitudeDelta <= Self.markerThreshold
         // Zoomed out past the threshold: too dense to draw/read — show none.
-        guard region.span.latitudeDelta <= Self.markerThreshold else {
+        guard zoomedIn else {
             if !displayedStops.isEmpty { displayedStops = [] }
             lastMarkerRegion = region
             return
@@ -222,9 +248,16 @@ struct HomeView: View {
         guard locationManager.checkLocationAuthorization() else { return }
         for _ in 0..<20 {
             if let coordinate = locationManager.currentLocation {
-                withAnimation {
-                    camera = .region(MKCoordinateRegion(center: coordinate, span: Self.defaultSpan))
-                }
+                // Shift the center south so the user sits in the visible area above
+                // the sheet (the default detent is medium, covering the bottom half).
+                let nudge = (1 - visibleFraction(for: sheetModel.selectedDetent)) / 2
+                let center = CLLocationCoordinate2D(
+                    latitude: coordinate.latitude - Self.defaultSpan.latitudeDelta * nudge,
+                    longitude: coordinate.longitude
+                )
+                let region = MKCoordinateRegion(center: center, span: Self.defaultSpan)
+                visibleRegion = region
+                withAnimation { camera = .region(region) }
                 return
             }
             do {
