@@ -44,7 +44,12 @@ struct RouteDetailList: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .success:
-            if let direction = routeDetail.selectedDirection {
+            // Empty directions ⇔ no trips (rows come from trip groups); a row
+            // with empty stops means trips exist but their stop times don't resolve.
+            if routeDetail.allDirections.isEmpty {
+                ContentUnavailableView("Not Running", systemImage: "bus",
+                                       description: Text("This route has no trips in the current service period."))
+            } else if let direction = routeDetail.selectedDirection, !direction.stops.isEmpty {
                 List {
                     Section(direction.headsign) {
                         ForEach(direction.stops) { stop in
@@ -62,7 +67,8 @@ struct RouteDetailList: View {
                     }
                 }
             } else {
-                ContentUnavailableView("No Stops", systemImage: "bus", description: Text("This route has no stop information."))
+                ContentUnavailableView("No Stops", systemImage: "bus",
+                                       description: Text("This route's trips have no stop information."))
             }
         case .failure(let error):
             ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error.localizedDescription))
