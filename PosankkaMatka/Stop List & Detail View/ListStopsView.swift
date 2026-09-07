@@ -17,8 +17,8 @@ struct ListStopsView: View {
     @Environment(ResourceStore<[Foli.Stop]>.self) private var stopsStore
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @Environment(LocationManager.self) var locationManager
-    /// Owns the nearby-stop computation so it happens on input changes, not in `body`.
-    @State private var nearbyStops = NearbyStopsProvider()
+    /// Nearby rows, recomputed only when an input changed (see `.task(id:)`).
+    @State private var nearbyStops: [StopWithDistance] = []
 
     /// Authorization, read from observable state instead of calling into
     /// `CLLocationManager` from a `body`.
@@ -39,7 +39,7 @@ struct ListStopsView: View {
                     search: search,
                     stops: stops,
                     routes: routesStore.state.value ?? [],
-                    nearbyStops: nearbyStops.rows,
+                    nearbyStops: nearbyStops,
                     isLocationAuthorized: isLocationAuthorized,
                     searchFilter: $searchFilter,
                     selectedStopID: $selectedStopID,
@@ -48,18 +48,27 @@ struct ListStopsView: View {
                 .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search stops or routes"))
                 // Recompute off the `body` path. Keyed on the stop set, the
                 // rounded location (sub-meter jitter is ignored), and the filter,
-                // so the provider only reruns when an input actually changed.
+                // so this only reruns when an input actually changed.
                 .task(id: nearbyInputs(stops)) {
-                    nearbyStops.recompute(
-                        stops: stops,
-                        coordinate: isLocationAuthorized ? locationManager.currentLocation : nil,
-                        filter: searchFilter
-                    )
+                    nearbyStops = nearbyRows(for: stops)
                 }
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error.localizedDescription))
             }
         }
+    }
+
+    /// Nearby stops, nearest first. No location → empty (the list discloses why).
+    private func nearbyRows(for stops: [Foli.Stop]) -> [StopWithDistance] {
+        guard isLocationAuthorized, let coordinate = locationManager.currentLocation else { return [] }
+        let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let maxDistance: Double? = if case .proximity(let meters) = searchFilter, meters > 0 {
+            meters
+        } else {
+            nil
+        }
+        return stops.nearest(to: origin, withinMeters: maxDistance)
+            .map { StopWithDistance($0.stop, distance: $0.distance) }
     }
 
     /// Task identity for the nearby inputs; coordinates are rounded so sub-meter
