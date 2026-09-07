@@ -31,12 +31,6 @@ final class LocationManager: NSObject, CLLocationManagerDelegate  {
         refreshAuthorization()
     }
 
-    /// A pure read with no side effects — safe to call from `body`. State changes
-    /// live in `refreshAuthorization()`, driven by the delegate.
-    func checkLocationAuthorization() -> Bool {
-        isAuthorized
-    }
-
     /// Recomputes `isAuthorized` from the system status and starts or stops
     /// location updates to match.
     private func refreshAuthorization() {
