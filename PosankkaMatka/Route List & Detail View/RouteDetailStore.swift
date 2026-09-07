@@ -43,8 +43,9 @@ final class RouteDetailStore {
             let trips = try await foli.fetchTrips(forRoute: routeId)
             let byDirection = Dictionary(grouping: trips, by: \.directionId)
             return try await withThrowingTaskGroup(of: RouteDirection.self) { group in
-                for directionId in byDirection.keys.sorted() {
-                    guard let trip = byDirection[directionId]?.first else { continue }
+                for (directionId, directionTrips) in byDirection {
+                    // Dictionary(grouping:) never yields empty arrays.
+                    let trip = directionTrips[0]
                     group.addTask {
                         async let stops = resolveStops(tripId: trip.tripId, using: foli)
                         async let path = resolvePath(shapeId: trip.shapeId, using: foli)
@@ -58,6 +59,7 @@ final class RouteDetailStore {
                 }
                 var result: [RouteDirection] = []
                 for try await direction in group { result.append(direction) }
+                // Task completion order is nondeterministic; sort by directionId.
                 return result.sorted { $0.id < $1.id }
             }
         }
