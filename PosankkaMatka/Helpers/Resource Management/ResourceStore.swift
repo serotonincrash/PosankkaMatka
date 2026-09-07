@@ -18,33 +18,38 @@ final class ResourceStore<T> {
     typealias Fetch = @Sendable () async throws -> T
 
     private(set) var state: ResourceState<T> = .loading
+    /// The last fetch error, kept alongside any still-visible value so a failed
+    /// refresh can surface a banner instead of wiping the list. Cleared on success.
+    private(set) var lastError: Foli.APIError?
 
     /// Fetches only if not loaded (for `.task`, which re-runs on appear).
     func load(_ fetch: @escaping Fetch) async {
         if case .success = state { return }
-        await run(fetch, resetToLoading: true)
+        state = .loading
+        lastError = nil
+        await run(fetch)
     }
 
-    /// Always fetches (for `.refreshable`); keeps the current value on failure.
+    /// Always fetches (for `.refreshable`); on failure keeps any loaded value in
+    /// `state` and reports through `lastError`.
     func refresh(_ fetch: @escaping Fetch) async {
-        await run(fetch, resetToLoading: false)
+        await run(fetch)
     }
 
-    private func run(_ fetch: @escaping Fetch, resetToLoading: Bool) async {
-        // Only blank to `.loading` when we have nothing to show; keep any
-        // existing value visible on refresh (and on a re-entrant `load`).
-        if resetToLoading, case .success = state {
-            // Already have data; don't blank it.
-        } else if resetToLoading {
-            state = .loading
-        }
-
+    private func run(_ fetch: @escaping Fetch) async {
         do {
             state = .success(try await fetch())
+            lastError = nil
         } catch is CancellationError {
             // View went away or the task was superseded — not a failure.
         } catch {
-            state = .failure(error as? Foli.APIError ?? .networkError(error))
+            let foliError = error as? Foli.APIError ?? .networkError(error)
+            lastError = foliError
+            // Full-screen failure only when there is no value to preserve
+            // (an initial load); a refresh failure leaves the list up.
+            if state.value == nil {
+                state = .failure(foliError)
+            }
         }
     }
 }

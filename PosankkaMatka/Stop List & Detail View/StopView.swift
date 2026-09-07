@@ -8,19 +8,27 @@
 import SwiftUI
 import FoliBusUI
 struct StopView: View {
-    @Namespace var namespace
     var stopWithDistance: StopWithDistance
     @FoliService var foli
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
-    @State private var arrivals = ResourceStore<[Foli.Arrival]>()
+    @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
 
     var body: some View {
         Group {
-            switch (arrivals.state) {
+            switch (arrivalsStore.state) {
             case .loading:
                 ProgressView()
             case .success(let arrivals):
                 VStack {
+                    // A failed refresh keeps the list up and reports here.
+                    if let error = arrivalsStore.lastError {
+                        Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal)
+                            .background(.yellow.opacity(0.15))
+                    }
                     if arrivals.count == 0 {
                         ContentUnavailableView("No Arrivals", systemImage: "pc")
                     } else {
@@ -40,21 +48,21 @@ struct StopView: View {
                                             .font(.footnote)
                                     }
                                 }
-                                
+
                             }
                         }
                     }
-                    
+
                 }
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))}
         }
-        .animation(.spring(.bouncy), value: arrivals.state)
+        .animation(.spring(.bouncy), value: arrivalsStore.state)
         .refreshable {
-            await arrivals.refresh(fetch)
+            await arrivalsStore.refresh(fetch)
         }
         .task {
-            await arrivals.load(fetch)
+            await arrivalsStore.load(fetch)
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
 

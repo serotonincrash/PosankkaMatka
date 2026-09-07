@@ -20,17 +20,6 @@ extension ResourceState {
         guard case .success(let value) = self else { return nil }
         return value
     }
-
-    /// The failure error, or `nil` unless in the `.failure` state.
-    var error: Foli.APIError? {
-        guard case .failure(let error) = self else { return nil }
-        return error
-    }
-
-    var isLoading: Bool {
-        guard case .loading = self else { return false }
-        return true
-    }
 }
 
 extension ResourceState: Equatable where T: Equatable {
