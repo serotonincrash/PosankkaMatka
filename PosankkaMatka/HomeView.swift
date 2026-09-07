@@ -35,15 +35,16 @@ struct HomeView: View {
     @State private var lastMarkerRegion: MKCoordinateRegion?
     @State private var selectedStopID: Foli.Stop.ID?
     @State private var stop: StopWithDistance?
-    /// Shared sheet detent, bound by `SheetHost`. Read only in framing methods —
-    /// never `body`, which would re-subscribe to per-drag writes.
+    /// Shared sheet detent, bound by `SheetHost`. Only `SheetHost` reads it in
+    /// `body` — it re-evaluates per drag-frame write by design. This view touches
+    /// it only in untracked framing methods, invoked via `onDetentChange`.
     @State private var sheetModel = SheetModel()
     @State private var selectedRoute: Foli.Route?
     /// Shared per-direction data (line + stops) and the selected direction, read
     /// by the map here and the pushed `RouteDetailList`.
     @State private var routeDetail = RouteDetailStore()
-    /// Maps stops to their vehicle mode (bus/boat) for the map markers.
-    @State private var stopTypes = StopTypeProvider()
+    /// Stop IDs served by a boat route — rendered with a ferry glyph on the map.
+    @State private var boatStopIDs: Set<Foli.Stop.ID> = []
 
     var body: some View {
         // Map + the sheet as ZStack SIBLINGS. The sheet (and its detent state)
@@ -55,7 +56,7 @@ struct HomeView: View {
                 camera: $camera,
                 selectedStopID: $selectedStopID,
                 displayedStops: displayedStops,
-                boatStopIDs: stopTypes.boatStopIDs,
+                boatStopIDs: boatStopIDs,
                 direction: routeDetail.selectedDirection,
                 routeColor: selectedRoute?.color ?? .accentColor,
                 isZoomedIn: isZoomedIn,
@@ -77,22 +78,14 @@ struct HomeView: View {
             .onChange(of: selectedRoute) { _, newRoute in
                 handleRouteSelection(newRoute)
             }
-            // Keep the selection framed in the visible area above the sheet when
-            // the detent changes. A pushed stop wins over a route.
-            .onChange(of: sheetModel.selectedDetent) { _, _ in
-                if let coordinate = stop?.stop.location?.toCLCoordinate() {
-                    frameSelectedStop(at: coordinate)
-                } else {
-                    frameSelectedDirection()
-                }
-            }
 
             SheetHost(
                 selectedStopID: $selectedStopID,
                 selectedRoute: $selectedRoute,
                 stop: $stop,
                 showingDetail: showingDetail,
-                sheetModel: sheetModel
+                sheetModel: sheetModel,
+                onDetentChange: reframeSelection
             )
         }
         .environment(locationManager)
@@ -105,7 +98,7 @@ struct HomeView: View {
             async let routes: Void = routesStore.load { try await foli.fetchRoutes() }
             _ = await (stops, routes)
             if let routes = routesStore.state.value {
-                await stopTypes.load(routes: routes, using: foli)
+                boatStopIDs = await Self.boatStopIDs(routes: routes, using: foli)
             }
             await centerOnUser()
         }
@@ -154,6 +147,16 @@ struct HomeView: View {
             await routeDetail.load(routeId: route.id, using: foli)
             // Frame once, on initial open — Picker switches afterward don't move
             // the camera (only redraw the line/pins).
+            frameSelectedDirection()
+        }
+    }
+
+    /// Reframes the selection for a changed detent — pushed stop wins over a
+    /// route. Invoked by `SheetHost` (untracked context), never from `body`.
+    private func reframeSelection() {
+        if let coordinate = stop?.stop.location?.toCLCoordinate() {
+            frameSelectedStop(at: coordinate)
+        } else {
             frameSelectedDirection()
         }
     }
@@ -212,6 +215,22 @@ struct HomeView: View {
 
     // MARK: - Helpers
 
+    /// Stop IDs served by a ferry route (GTFS `route_type` 4): walks ferry
+    /// routes → trips → stop times. Failures skip a trip (bus fallback).
+    private static func boatStopIDs(routes: [Foli.Route], using foli: FoliService) async -> Set<Foli.Stop.ID> {
+        let ferryRouteIDs = routes.filter { $0.type == 4 }.map(\.id)
+        guard !ferryRouteIDs.isEmpty else { return [] }
+        var ids: Set<Foli.Stop.ID> = []
+        for routeID in ferryRouteIDs {
+            guard let trips = try? await foli.fetchTrips(forRoute: routeID) else { continue }
+            for trip in trips {
+                guard let stopTimes = try? await foli.fetchStopTimes(forTrip: trip.tripId) else { continue }
+                ids.formUnion(stopTimes.compactMap(\.stopId))
+            }
+        }
+        return ids
+    }
+
     /// Refreshes markers for a settled region, skipping when only the inset
     /// shifted (a sheet detent change fires `onMapCameraChange` with a barely
     /// changed region).
@@ -245,7 +264,7 @@ struct HomeView: View {
     /// Centers the initial camera on the user once a fix arrives (polled briefly,
     /// since `currentLocation` populates async). The map doesn't live-recenter.
     private func centerOnUser() async {
-        guard locationManager.checkLocationAuthorization() else { return }
+        guard locationManager.isAuthorized else { return }
         for _ in 0..<20 {
             if let coordinate = locationManager.currentLocation {
                 // Shift the center south so the user sits in the visible area above

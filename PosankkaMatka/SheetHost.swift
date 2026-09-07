@@ -30,6 +30,11 @@ struct SheetHost: View {
     let showingDetail: Bool
     /// Shared detent state, bound to the sheet.
     @Bindable var sheetModel: SheetModel
+    /// Reframes the map selection on detent changes. Fired from HERE so per-drag
+    /// detent writes invalidate only this view — reading
+    /// `sheetModel.selectedDetent` from `HomeView.body` (e.g. `onChange(of:)`)
+    /// would re-subscribe `HomeView` and re-diff the Map on every write.
+    let onDetentChange: () -> Void
 
     var body: some View {
         Color.clear
@@ -58,6 +63,9 @@ struct SheetHost: View {
                 if isShowing, sheetModel.selectedDetent == .height(110) {
                     withAnimation { sheetModel.selectedDetent = .medium }
                 }
+            }
+            .onChange(of: sheetModel.selectedDetent) { _, _ in
+                onDetentChange()
             }
     }
 }
