@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/serotonincrash/FoliBusAPI",
       "state" : {
-        "revision" : "9c1b11bc345f547ffbd2bb865fe93548ae4bf81c",
-        "version" : "2.1.0"
+        "revision" : "2d31cd89bc6bd90ceb0c13d299264c77056fe3ba",
+        "version" : "2.2.0"
       }
     },
     {
