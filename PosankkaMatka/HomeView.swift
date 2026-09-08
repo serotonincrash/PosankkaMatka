@@ -35,9 +35,9 @@ struct HomeView: View {
     @State private var lastMarkerRegion: MKCoordinateRegion?
     @State private var selectedStopID: Foli.Stop.ID?
     @State private var stop: StopWithDistance?
-    /// Shared sheet detent, bound by `SheetHost`. Only `SheetHost` reads it in
+    /// Shared sheet detents, bound by `SheetHost`. Only `SheetHost` reads them in
     /// `body` — it re-evaluates per drag-frame write by design. This view touches
-    /// it only in untracked framing methods, invoked via `onDetentChange`.
+    /// them only in untracked framing methods, invoked via `onCardDetentChange`.
     @State private var sheetModel = SheetModel()
     @State private var selectedRoute: Foli.Route?
     /// Shared per-direction data (line + stops) and the selected direction, read
@@ -47,10 +47,11 @@ struct HomeView: View {
     @State private var boatStopIDs: Set<Foli.Stop.ID> = []
 
     var body: some View {
-        // Map + the sheet as ZStack SIBLINGS. The sheet (and its detent state)
-        // lives in `SheetHost`, so drag-churn never re-evaluates this view / the
-        // Map. `presentationBackgroundInteraction` is host-wide, so the map stays
-        // undimmed and interactive behind the sheet despite being a sibling.
+        // Map + the sheets as ZStack SIBLINGS. The sheets (and their detent
+        // state) live in `SheetHost`, so drag-churn never re-evaluates this view /
+        // the Map. `presentationBackgroundInteraction` is host-wide, so the map
+        // stays undimmed and interactive behind the sheets despite being a
+        // sibling.
         ZStack {
             MapView(
                 camera: $camera,
@@ -71,8 +72,8 @@ struct HomeView: View {
                 handleStopSelection(newValue)
             }
             .onChange(of: stop) { _, newStop in
-                // Returned to the list: drop the marker highlight so the same
-                // stop is re-tappable.
+                // Card dismissed: drop the marker highlight so the same stop is
+                // re-tappable.
                 if newStop == nil { selectedStopID = nil }
             }
             .onChange(of: selectedRoute) { _, newRoute in
@@ -83,9 +84,8 @@ struct HomeView: View {
                 selectedStopID: $selectedStopID,
                 selectedRoute: $selectedRoute,
                 stop: $stop,
-                showingDetail: showingDetail,
                 sheetModel: sheetModel,
-                onDetentChange: reframeSelection
+                onCardDetentChange: reframeSelection
             )
         }
         .environment(locationManager)
@@ -119,22 +119,18 @@ struct HomeView: View {
 
     // MARK: - Selection
 
-    /// Opens the stop's detail and frames it in the visible area above the sheet.
-    /// `selectedStopID` is cleared in `onChange(of: stop)` on return, not here
+    /// Presents the stop card and frames the stop in the visible area above it.
+    /// `selectedStopID` is cleared in `.onChange(of: stop)` on dismissal, not here
     /// (which would drop the highlight).
     private func handleStopSelection(_ newValue: Foli.Stop.ID?) {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
-        // Recenter BEFORE pushing the detail: the concurrent navigation push can
+        // Recenter BEFORE presenting the card: the concurrent sheet transition can
         // otherwise make MapKit skip the camera animation and drop the zoom.
         frameSelectedStop(at: coordinate)
-        // Detent raise is centralized in `.onChange(of: showingDetail)`.
         stop = StopWithDistance(found)
     }
-
-    /// Whether a detail (stop or route) is currently pushed — drives the detent.
-    private var showingDetail: Bool { stop != nil || selectedRoute != nil }
 
     /// Loads the route's per-direction data; deselecting clears it.
     private func handleRouteSelection(_ route: Foli.Route?) {
@@ -151,8 +147,9 @@ struct HomeView: View {
         }
     }
 
-    /// Reframes the selection for a changed detent — pushed stop wins over a
-    /// route. Invoked by `SheetHost` (untracked context), never from `body`.
+    /// Reframes the selection for a changed card detent — the stop card wins over
+    /// the route card. Invoked by `SheetHost` (untracked context), never from
+    /// `body`.
     private func reframeSelection() {
         if let coordinate = stop?.stop.location?.toCLCoordinate() {
             frameSelectedStop(at: coordinate)
@@ -161,14 +158,14 @@ struct HomeView: View {
         }
     }
 
-    /// Frames a stop in the map area above the sheet, keeping a deliberate close
-    /// zoom or snapping to street level when zoomed out.
+    /// Frames a stop in the map area above the stop card, keeping a deliberate
+    /// close zoom or snapping to street level when zoomed out.
     private func frameSelectedStop(at coordinate: CLLocationCoordinate2D) {
         let currentSpan = visibleRegion?.span ?? Self.defaultSpan
         let span = currentSpan.latitudeDelta <= Self.markerThreshold ? currentSpan : Self.selectionSpan
         // Shift the center south so the stop sits in the visible area above the
-        // sheet, using the detent's visible fraction.
-        let nudge = (1 - visibleFraction(for: sheetModel.selectedDetent)) / 2
+        // card, using the card detent's visible fraction.
+        let nudge = (1 - visibleFraction(for: sheetModel.stopDetent)) / 2
         let center = CLLocationCoordinate2D(
             latitude: coordinate.latitude - span.latitudeDelta * nudge,
             longitude: coordinate.longitude
@@ -181,19 +178,19 @@ struct HomeView: View {
     }
 
     /// Frames the selected direction's path (or stop coords) in the map area above
-    /// the sheet at the current detent — not centered behind it.
+    /// the route card at its current detent — not centered behind it.
     private func frameSelectedDirection() {
-        // A pushed stop wins: never re-frame the route over it.
+        // The stop card wins: never re-frame the route over it.
         guard stop == nil, let direction = routeDetail.selectedDirection else { return }
         let coords = direction.path.isEmpty
             ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
             : direction.path
         guard let region = MKCoordinateRegion(enclosing: coords) else { return }
 
-        // Fit the route into the visible fraction above the sheet: inflate the
-        // span so the route occupies only that fraction, then shift the center
+        // Fit the route into the visible fraction above the route card: inflate
+        // the span so the route occupies only that fraction, then shift the center
         // south (lower latitude) by the added height so it sits in the top part.
-        let fraction = visibleFraction(for: sheetModel.selectedDetent)
+        let fraction = visibleFraction(for: sheetModel.routeDetent)
         let latDelta = region.span.latitudeDelta / fraction
         let addedLat = latDelta - region.span.latitudeDelta
         let framed = MKCoordinateRegion(
@@ -207,10 +204,15 @@ struct HomeView: View {
         withAnimation { camera = .region(framed) }
     }
 
-    /// Approximate fraction of the map height left visible above the sheet at a
-    /// given detent. Peek leaves almost all of it; medium ~the top half.
+    /// Approximate fraction of the map height left visible above a sheet at a
+    /// given detent. Peek leaves almost all of it; medium ~the top half; large
+    /// ~a quarter.
     private func visibleFraction(for detent: PresentationDetent) -> CGFloat {
-        detent == .medium ? 0.5 : 0.85
+        switch detent {
+        case .medium: 0.5
+        case .large: 0.25
+        default: 0.85
+        }
     }
 
     // MARK: - Helpers
