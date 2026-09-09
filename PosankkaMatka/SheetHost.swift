@@ -16,27 +16,32 @@ import FoliBusUI
 @Observable
 final class SheetModel {
     /// Detent of the master lists sheet.
-    var selectedDetent: PresentationDetent = .medium
-    /// Detent of the stop card.
-    var stopDetent: PresentationDetent = .medium
-    /// Detent of the route card.
-    var routeDetent: PresentationDetent = .medium
+    var listDetent: PresentationDetent = .medium
+    /// Detent of the detail card (stop or route content).
+    var cardDetent: PresentationDetent = .medium
 }
 
-/// Hosts the app's sheets in isolation from the map, so sheet-drag detent writes
-/// invalidate only these trivial views — not `HomeView`, which renders the live
-/// map. The map (a ZStack sibling) stays undimmed and tappable behind every sheet
-/// via host-wide `presentationBackgroundInteraction`.
+/// Hosts the app's two sheets in isolation from the map, so sheet-drag detent
+/// writes invalidate only these trivial views — not `HomeView`, which renders
+/// the live map. The sheets are siblings — never nested — so every detent drag
+/// acts on the one visible sheet. The map (a ZStack sibling) stays undimmed and
+/// tappable behind every sheet via host-wide `presentationBackgroundInteraction`.
 ///
-/// Maps-style presentation, without dismissal races: the master sheet stays
-/// presented permanently, and the stop and route cards present OVER it (a stop
-/// selection overlays the route card the same way). Swapping sheets by
-/// dismiss-then-present — the literal Maps sequence — loses the incoming sheet's
-/// presentation config (detents, grabber, background interaction) roughly half
-/// the time when the presentation is queued behind a dismissal, so nothing here
-/// ever dismisses and presents in the same transition. Dismissing a card simply
-/// reveals the sheet beneath it, which also restores the master at its last
-/// detent for free.
+/// Maps-style swap: the master lists and ONE detail card swap as whole sheets
+/// (dismiss + present, sequenced by UIKit). Within the card, stop and route
+/// details are content swaps — never re-presentations — because presenting a
+/// new sheet while the old one dismisses (e.g. stop over route) reliably came
+/// up with default config (full height, no detents or grabber). (A single
+/// never-dismissed morphing sheet was tried instead: the shared navigation bar
+/// flashes between the lists' and the card's titles mid-swap, and in-content
+/// headers are a UI regression — cards keep native titles in their own stack.)
+///
+/// Neither sheet is swipe-dismissable: the master leaves only when a card
+/// presents, the card only via its close button, which always exits to the
+/// lists (from however deep the card is) — so a downward detent drag always
+/// means "collapse", down to the shared peek. The master returns at its last
+/// detent; a fresh card opens at `.medium` (set in `HomeView`'s selection
+/// handlers), while swaps within an open card keep the user's detent.
 struct SheetHost: View {
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
@@ -50,104 +55,111 @@ struct SheetHost: View {
     let onCardDetentChange: () -> Void
 
     var body: some View {
-        Color.clear
-            .allowsHitTesting(false)   // never intercept taps meant for the map
-            .sheet(isPresented: .constant(true)) {
-                NavigationStack {
-                    ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
-                        // Card hosts live in the master's content: sheets
-                        // present over the master from within, never beside it.
-                        .background(
-                            ZStack {
-                                routeCard
-                                stopCard(item: masterStopItem)
-                                    .onChange(of: sheetModel.stopDetent) { _, _ in
-                                        onCardDetentChange()
-                                    }
-                            }
-                        )
+        ZStack {
+            // Master lists: up only when no card is. Never dismissable — it
+            // leaves only when a card presents, and returns (at its last
+            // detent) when that card goes away.
+            Color.clear
+                .allowsHitTesting(false)   // never intercept taps meant for the map
+                .sheet(isPresented: masterPresented) {
+                    NavigationStack {
+                        ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
+                    }
+                    .presentationDetents([.height(110), .medium], selection: $sheetModel.listDetent)
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .interactiveDismissDisabled()
                 }
-                .presentationDetents([.height(110), .medium], selection: $sheetModel.selectedDetent)
-                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                .interactiveDismissDisabled()
-            }
-    }
 
-    /// The route card over the lists. Its content hosts the stop card, so a stop
-    /// selection (row tap or map marker behind the card) overlays the route card
-    /// without dismissing it — dismissing the stop card reveals it again.
-    private var routeCard: some View {
-        Color.clear
-            .allowsHitTesting(false)
-            .sheet(item: $selectedRoute) { route in
-                cardChrome($sheetModel.routeDetent) {
-                    RouteDetailList(route: route, selectedStopID: $selectedStopID)
-                        .background(
-                            stopCard(item: $stop)
-                                .onChange(of: sheetModel.stopDetent) { _, _ in
-                                    onCardDetentChange()
-                                }
-                        )
-                }
-            }
-            .onChange(of: sheetModel.routeDetent) { _, _ in
-                onCardDetentChange()
-            }
-    }
-
-    /// The stop card. Parameterized by item so the same host serves both nesting
-    /// levels: the master hosts it only while no route card is up (otherwise its
-    /// item is forced nil — the route card's content hosts the live one).
-    private func stopCard(item: Binding<StopWithDistance?>) -> some View {
-        Color.clear
-            .allowsHitTesting(false)
-            .sheet(item: item) { stop in
-                cardChrome($sheetModel.stopDetent) {
-                    StopView(stopWithDistance: stop)
-                        // Fresh identity per stop → its store resets and
-                        // re-fetches arrivals rather than reusing stale data.
-                        .id(stop.id)
-                }
-            }
-    }
-
-    /// Shared detail-card chrome: a navigation context for titles, Maps-style
-    /// detents with a drag indicator, a tappable map behind the card at
-    /// `.medium`, and the Maps-style exit button (swipe-down also dismisses).
-    private func cardChrome(_ detent: Binding<PresentationDetent>, @ViewBuilder _ content: () -> some View) -> some View {
-        NavigationStack {
-            content()
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        CardCloseButton()
+            // The detail card: stop content when a stop is selected (winning
+            // over route content), else route content. Selecting a stop while
+            // the card is already up just swaps the content — no
+            // dismissal/presentation pair to race.
+            Color.clear
+                .allowsHitTesting(false)
+                .sheet(isPresented: cardPresented) {
+                    cardChrome {
+                        if let stop {
+                            StopView(stopWithDistance: stop)
+                                // Fresh identity per stop → its store resets and
+                                // re-fetches arrivals rather than reusing stale data.
+                                .id(stop.id)
+                                .transition(cardTransition)
+                        } else if let selectedRoute {
+                            RouteDetailList(route: selectedRoute, selectedStopID: $selectedStopID)
+                                .transition(cardTransition)
+                        }
                     }
                 }
+                .onChange(of: sheetModel.cardDetent) { _, _ in
+                    onCardDetentChange()
+                }
         }
-        .presentationDetents([.medium, .large], selection: detent)
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        .presentationDragIndicator(.visible)
     }
 
-    /// The master hosts the stop card only when it is the top sheet; while a
-    /// route is selected the route card's content owns the presentation.
-    private var masterStopItem: Binding<StopWithDistance?> {
+    /// The detail-card chrome: a navigation context for native titles, Maps-
+    /// style detents (peek to large) with a drag indicator, a tappable map
+    /// behind the card up to `.medium`, and the close button. Content swaps
+    /// (stop ⇄ route) slide the new content up over the old. Swipe-down is
+    /// disabled so a downward drag always collapses the card, never dismisses
+    /// it — the button always exits to the lists.
+    private func cardChrome(@ViewBuilder _ content: () -> some View) -> some View {
+        NavigationStack {
+            ZStack {
+                content()
+            }
+            .animation(.spring(duration: 0.3), value: stop)
+            .animation(.spring(duration: 0.3), value: selectedRoute)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    CardCloseButton {
+                        // Always exit to the lists, from however deep the card
+                        // is (stop-over-route included).
+                        stop = nil
+                        selectedRoute = nil
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(110), .medium, .large], selection: $sheetModel.cardDetent)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled()
+    }
+
+    /// The card content replacement: the new detail slides up over the old one.
+    private var cardTransition: AnyTransition {
+        .asymmetric(insertion: .move(edge: .bottom), removal: .opacity)
+    }
+
+    /// The master shows exactly when no card is up. The no-op setter is safe:
+    /// the master can't be interactively dismissed, and programmatic dismissal
+    /// flows through the selection state that feeds `get`.
+    private var masterPresented: Binding<Bool> {
         Binding(
-            get: { selectedRoute == nil ? stop : nil },
-            set: { stop = $0 }
+            get: { stop == nil && selectedRoute == nil },
+            set: { _ in }
+        )
+    }
+
+    /// The card shows while anything is selected. Same no-op-setter reasoning:
+    /// the card can't be interactively dismissed, and the close button pops by
+    /// mutating the selection state.
+    private var cardPresented: Binding<Bool> {
+        Binding(
+            get: { stop != nil || selectedRoute != nil },
+            set: { _ in }
         )
     }
 }
 
-/// Dismisses the card it sits in. Resolved inside the card's own presentation,
-/// so it dismisses just that card (e.g. the stop card over the route card) and
-/// writes `nil` back through the card's item binding, exactly like a swipe.
+/// Closes the card via the given action — exits to the lists from however deep
+/// the card is, unlike `\.dismiss`, which would tear down the whole card the
+/// same way but reads less intentionally here.
 private struct CardCloseButton: View {
-    @Environment(\.dismiss) private var dismiss
+    let action: () -> Void
 
     var body: some View {
-        Button {
-            dismiss()
-        } label: {
+        Button(action: action) {
             Image(systemName: "xmark")
         }
         .accessibilityLabel("Close")

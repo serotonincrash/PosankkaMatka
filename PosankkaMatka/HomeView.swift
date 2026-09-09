@@ -126,6 +126,9 @@ struct HomeView: View {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
+        // A fresh card (nothing selected yet) opens at the default height;
+        // swaps within an open card keep the user's chosen detent.
+        if stop == nil && selectedRoute == nil { sheetModel.cardDetent = .medium }
         // Recenter BEFORE presenting the card: the concurrent sheet transition can
         // otherwise make MapKit skip the camera animation and drop the zoom.
         frameSelectedStop(at: coordinate)
@@ -139,6 +142,9 @@ struct HomeView: View {
             return
         }
         let foli = foli
+        // Routes select from the lists, so the card is always fresh here: open
+        // at the default height, not whatever the last card was left at.
+        sheetModel.cardDetent = .medium
         Task {
             await routeDetail.load(routeId: route.id, using: foli)
             // Frame once, on initial open — Picker switches afterward don't move
@@ -165,7 +171,7 @@ struct HomeView: View {
         let span = currentSpan.latitudeDelta <= Self.markerThreshold ? currentSpan : Self.selectionSpan
         // Shift the center south so the stop sits in the visible area above the
         // card, using the card detent's visible fraction.
-        let nudge = (1 - visibleFraction(for: sheetModel.stopDetent)) / 2
+        let nudge = (1 - visibleFraction(for: sheetModel.cardDetent)) / 2
         let center = CLLocationCoordinate2D(
             latitude: coordinate.latitude - span.latitudeDelta * nudge,
             longitude: coordinate.longitude
@@ -190,7 +196,7 @@ struct HomeView: View {
         // Fit the route into the visible fraction above the route card: inflate
         // the span so the route occupies only that fraction, then shift the center
         // south (lower latitude) by the added height so it sits in the top part.
-        let fraction = visibleFraction(for: sheetModel.routeDetent)
+        let fraction = visibleFraction(for: sheetModel.cardDetent)
         let latDelta = region.span.latitudeDelta / fraction
         let addedLat = latDelta - region.span.latitudeDelta
         let framed = MKCoordinateRegion(
@@ -205,14 +211,12 @@ struct HomeView: View {
     }
 
     /// Approximate fraction of the map height left visible above a sheet at a
-    /// given detent. Peek leaves almost all of it; medium ~the top half; large
-    /// ~a quarter.
+    /// given detent. Peek leaves almost all of it; medium ~the top half. Large
+    /// covers nearly everything — fitting into that sliver would explode the
+    /// zoom (a route fit to a quarter of the screen zooms out ~4×, flattening
+    /// its turns) — so it frames like medium and the camera holds still.
     private func visibleFraction(for detent: PresentationDetent) -> CGFloat {
-        switch detent {
-        case .medium: 0.5
-        case .large: 0.25
-        default: 0.85
-        }
+        detent == .height(110) ? 0.85 : 0.5
     }
 
     // MARK: - Helpers
@@ -271,7 +275,7 @@ struct HomeView: View {
             if let coordinate = locationManager.currentLocation {
                 // Shift the center south so the user sits in the visible area above
                 // the sheet (the default detent is medium, covering the bottom half).
-                let nudge = (1 - visibleFraction(for: sheetModel.selectedDetent)) / 2
+                let nudge = (1 - visibleFraction(for: sheetModel.listDetent)) / 2
                 let center = CLLocationCoordinate2D(
                     latitude: coordinate.latitude - Self.defaultSpan.latitudeDelta * nudge,
                     longitude: coordinate.longitude

@@ -20,6 +20,17 @@ struct RouteDetailList: View {
         @Bindable var routeDetail = routeDetail
 
         VStack(spacing: 0) {
+            // The corridor name as a quiet subtitle — the full name truncates
+            // as a large title.
+            if !route.longName.isEmpty {
+                Text(route.longName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, routeDetail.allDirections.count > 1 ? 4 : 8)
+            }
             // Pinned above the list so it stays visible while the stops scroll.
             if routeDetail.allDirections.count > 1 {
                 Picker("Direction", selection: $routeDetail.selectedDirectionId) {
@@ -29,13 +40,16 @@ struct RouteDetailList: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.bottom, 8)
             }
 
             content
         }
-        .navigationTitle(route.fullDisplayName)
-        .navigationBarTitleDisplayMode(.inline)
+        // "Route" + line number — the full name lives in the subtitle above.
+        // Large like the stop title: the card's navigation bar carries display
+        // mode (and scroll collapse) across content swaps, so mixing inline and
+        // large makes the title style depend on the path taken.
+        .navigationTitle("Route \(route.shortName)")
     }
 
     @ViewBuilder
@@ -50,20 +64,20 @@ struct RouteDetailList: View {
                 ContentUnavailableView("Not Running", systemImage: "bus",
                                        description: Text("This route has no trips in the current service period."))
             } else if let direction = routeDetail.selectedDirection, !direction.stops.isEmpty {
+                // No section header — the direction is already shown by the
+                // picker (or the single-direction subtitle) above.
                 List {
-                    Section(direction.headsign) {
-                        ForEach(direction.stops) { stop in
-                            Button {
-                                selectedStopID = stop.id
-                            } label: {
-                                HStack {
-                                    Text(stop.id).monospaced()
-                                    Text(stop.name)
-                                    Spacer()
-                                }
+                    ForEach(direction.stops) { stop in
+                        Button {
+                            selectedStopID = stop.id
+                        } label: {
+                            HStack {
+                                Text(stop.id).monospaced()
+                                Text(stop.name)
+                                Spacer()
                             }
-                            .tint(.primary)
                         }
+                        .tint(.primary)
                     }
                 }
             } else {
