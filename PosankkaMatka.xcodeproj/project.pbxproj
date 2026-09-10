@@ -7,8 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D158E6382F833CE700DF70CE /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D158E6372F833CE700DF70CE /* FoliBusAPI */; };
-		D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1C5F4F12FC8A5D200B262FA /* Forever */; };
+		D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB3393007B6F200F86DBB /* FoliBusAPI */; };
+		D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB33B3007B6F200F86DBB /* FoliBusUI */; };
+		D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1A8200B302DDA0800BFEC15 /* Forever */; };
+		D1FA4CCC302091830052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCB302091830052526B /* Forever */; };
+		D1FA4CCF302091ED0052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCE302091ED0052526B /* Forever */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,8 +60,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D1C5F4F22FC8A5D200B262FA /* Forever in Frameworks */,
-				D158E6382F833CE700DF70CE /* FoliBusAPI in Frameworks */,
+				D1FA4CCF302091ED0052526B /* Forever in Frameworks */,
+				D1FA4CCC302091830052526B /* Forever in Frameworks */,
+				D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */,
+				D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */,
+				D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,8 +125,11 @@
 			);
 			name = PosankkaMatka;
 			packageProductDependencies = (
-				D158E6372F833CE700DF70CE /* FoliBusAPI */,
-				D1C5F4F12FC8A5D200B262FA /* Forever */,
+				D13DB3393007B6F200F86DBB /* FoliBusAPI */,
+				D13DB33B3007B6F200F86DBB /* FoliBusUI */,
+				D1FA4CCB302091830052526B /* Forever */,
+				D1FA4CCE302091ED0052526B /* Forever */,
+				D1A8200B302DDA0800BFEC15 /* Forever */,
 			);
 			productName = PosankkaMatka;
 			productReference = D158E60C2F833CA400DF70CE /* PosankkaMatka.app */;
@@ -180,7 +189,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					D158E60B2F833CA400DF70CE = {
 						CreatedOnToolsVersion = 26.3;
@@ -205,8 +214,8 @@
 			mainGroup = D158E6032F833CA400DF70CE;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
-				D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */,
+				D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
+				D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D158E60D2F833CA400DF70CE /* Products */;
@@ -341,6 +350,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -398,6 +408,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -406,11 +417,11 @@
 		D158E62E2F833CA600DF70CE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = PossankaMatkaIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3N9YQ5B6KM;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = XL5JK4F896;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "PosankkaMatka uses your location to detect stops near you.";
@@ -420,6 +431,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -440,11 +452,11 @@
 		D158E62F2F833CA600DF70CE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = PossankaMatkaIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3N9YQ5B6KM;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = XL5JK4F896;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "PosankkaMatka uses your location to detect stops near you.";
@@ -454,6 +466,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -597,33 +610,46 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */ = {
+		D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/serotonincrash/FoliBusAPI";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+		D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/serotonincrash/Forever";
 			requirement = {
 				branch = main;
 				kind = branch;
 			};
 		};
-		D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/jiachenyee/Forever";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.1.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D158E6372F833CE700DF70CE /* FoliBusAPI */ = {
+		D13DB3393007B6F200F86DBB /* FoliBusAPI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D158E6362F833CE700DF70CE /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
+			package = D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
 			productName = FoliBusAPI;
 		};
-		D1C5F4F12FC8A5D200B262FA /* Forever */ = {
+		D13DB33B3007B6F200F86DBB /* FoliBusUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D1C5F4F02FC8A5D200B262FA /* XCRemoteSwiftPackageReference "Forever" */;
+			package = D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */;
+			productName = FoliBusUI;
+		};
+		D1A8200B302DDA0800BFEC15 /* Forever */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */;
+			productName = Forever;
+		};
+		D1FA4CCB302091830052526B /* Forever */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Forever;
+		};
+		D1FA4CCE302091ED0052526B /* Forever */ = {
+			isa = XCSwiftPackageProductDependency;
 			productName = Forever;
 		};
 /* End XCSwiftPackageProductDependency section */

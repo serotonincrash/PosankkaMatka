@@ -8,7 +8,6 @@
 import Foundation
 
 extension Double {
-    /// Returns a string representation of the number rounded to `places` decimal places.
     func formatted(toDecimalPlaces places: Int) -> String {
         return String(format: "%.\(places)f", self)
     }

@@ -1,22 +1,31 @@
 {
-  "originHash" : "cf9c850d9b0f4c8fc764422a805a144c4b8408b64ff03a96bbb78b7839f1fdb2",
+  "originHash" : "65b5297e400ac74189d87531c2aff2e52b112350920c41bf62d58fe119087a2f",
   "pins" : [
     {
       "identity" : "folibusapi",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/serotonincrash/FoliBusAPI",
       "state" : {
-        "branch" : "main",
-        "revision" : "56b9d6a7a2e1b374ff8a7fff3afe4e85a58275e3"
+        "revision" : "2d31cd89bc6bd90ceb0c13d299264c77056fe3ba",
+        "version" : "2.2.0"
       }
     },
     {
       "identity" : "forever",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/jiachenyee/Forever",
+      "location" : "https://github.com/serotonincrash/Forever",
       "state" : {
-        "revision" : "90274e87842722d9b79e61431cbbef1c418944b6",
-        "version" : "1.1.0"
+        "branch" : "main",
+        "revision" : "961cd7fed27f980923265eeba39bfa65e2ea553e"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax",
+      "state" : {
+        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
+        "version" : "603.0.2"
       }
     }
   ],

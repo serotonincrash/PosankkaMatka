@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import FoliBusAPI
+import FoliBusUI
 
 @main
 struct PosankkaMatkaApp: App {
@@ -16,10 +16,11 @@ struct PosankkaMatkaApp: App {
             HomeView()
                 .environment(
                     \.foliClientProvider,
+                     
                     DefaultFoliClientProvider(
                         configuration: FoliClientConfiguration(
                             cacheBehavior: .cachedOrFetch,
-                            cacheTimeout: .default
+                            cacheTTL: .default
                         )
                     )
                 )

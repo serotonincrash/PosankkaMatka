@@ -7,12 +7,10 @@
 
 import FoliBusAPI
 
-struct StopWithDistance: Identifiable {
+struct StopWithDistance: Identifiable, Hashable {
     var id: String { stop.id }
-    /// The stop this type encapsulates.
     var stop: Foli.Stop
     
-    /// The distance from the user, in meters.
     var distance: Double?
     
     init(_ stop: Foli.Stop) {
@@ -22,5 +20,13 @@ struct StopWithDistance: Identifiable {
     init(_ stop: Foli.Stop, distance: Double) {
         self.stop = stop
         self.distance = distance
+    }
+
+    /// Distance for display, or `nil` when unset (e.g. search results).
+    var distanceText: String? {
+        guard let distance else { return nil }
+        return distance < 1000
+            ? "\(Int(distance)) m"
+            : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km"
     }
 }
