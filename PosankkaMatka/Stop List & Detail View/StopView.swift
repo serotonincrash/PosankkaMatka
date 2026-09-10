@@ -33,7 +33,7 @@ struct StopView: View {
                         ContentUnavailableView("No Arrivals", systemImage: "pc")
                     } else {
                         List {
-                            Section("Arrivals") {
+                            Section {
                                 ForEach(arrivals) { arrival in
                                     HStack(spacing: 12) {
                                         if let route = route(for: arrival) {
@@ -44,13 +44,41 @@ struct StopView: View {
                                         }
                                         Text(arrival.destinationDisplay)
                                         Spacer()
-                                        Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
-                                            .font(.footnote)
+                                        // Ticks between polls so "N min" counts
+                                        // down instead of freezing at render time.
+                                        TimelineView(.periodic(from: .now, by: 15)) { _ in
+                                            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
+                                                .font(.footnote)
+                                                .monospacedDigit()
+                                        }
                                     }
                                 }
-
+                            } header: {
+                                HStack {
+                                    Text("Arrivals")
+                                    Spacer()
+                                    // "Updating…" while a fetch is in flight,
+                                    // else the wall-clock time of the data —
+                                    // not relative wording, which would read
+                                    // "now" for most of the 20 s poll cycle.
+                                    if arrivalsStore.isRefreshing {
+                                        Text("Updating…")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .textCase(nil)
+                                    } else if let updated = arrivalsStore.lastUpdated {
+                                        Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .textCase(nil)
+                                    }
+                                }
                             }
                         }
+                        // Animate the poll diffs themselves — rows sliding as
+                        // departures pass and reorder — not just the load-state
+                        // change covered by the Group-level animation below.
+                        .animation(.spring(.bouncy), value: arrivals)
                     }
 
                 }
@@ -62,7 +90,16 @@ struct StopView: View {
             await arrivalsStore.refresh(fetch)
         }
         .task {
+            // Initial load (drives the loading state), then live: the SM feed
+            // caches replies server-side for 15–30 s, so polling ~20 s keeps
+            // the list current without hammering it. Scoped to the card's
+            // lifetime (`.id(stop.id)` resets it per stop).
             await arrivalsStore.load(fetch)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled else { return }
+                await arrivalsStore.refresh(fetch)
+            }
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
 
