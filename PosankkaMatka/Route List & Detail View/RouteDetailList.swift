@@ -45,10 +45,8 @@ struct RouteDetailList: View {
 
             content
         }
-        // "Route" + line number — the full name lives in the subtitle above.
-        // Large like the stop title: the card's navigation bar carries display
-        // mode (and scroll collapse) across content swaps, so mixing inline and
-        // large makes the title style depend on the path taken.
+        // "Route N"; large like the stop title — the card's bar keeps one
+        // display mode across content swaps.
         .navigationTitle("Route \(route.shortName)")
     }
 
@@ -58,8 +56,8 @@ struct RouteDetailList: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .success:
-            // Empty directions ⇔ no trips (rows come from trip groups); a row
-            // with empty stops means trips exist but their stop times don't resolve.
+            // Empty directions ⇔ no trips; a direction with empty stops means
+            // trips exist but their stop times don't resolve.
             if routeDetail.allDirections.isEmpty {
                 ContentUnavailableView("Not Running", systemImage: "bus",
                                        description: Text("This route has no trips in the current service period."))

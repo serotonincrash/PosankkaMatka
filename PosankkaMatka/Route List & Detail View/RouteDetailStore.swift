@@ -9,9 +9,9 @@ import CoreLocation
 import Observation
 import FoliBusUI
 
-/// Shared selected-route detail: per-direction stops + polyline (joined via the
-/// trip carrying both `directionId` and `shapeId`) and the shown direction. One
-/// `selectedDirectionId` drives the map line, pins, camera, and stop list.
+/// Selected-route detail shared by the map and the card: per-direction stops +
+/// polyline (both come from one representative trip) and the shown direction;
+/// `selectedDirectionId` drives map + list together.
 @MainActor
 @Observable
 final class RouteDetailStore {
@@ -28,7 +28,7 @@ final class RouteDetailStore {
     /// Loads directions and selects the first; resets first so a new route doesn't flash the old one.
     func load(routeId: String, using foli: FoliService) async {
         selectedDirectionId = nil
-        directions = ResourceStore<[RouteDirection]>()  // fresh → clears prior route, back to .loading
+        directions = ResourceStore<[RouteDirection]>()
         await directions.load(Self.fetch(routeId: routeId, using: foli))
         selectedDirectionId = allDirections.first?.id
     }

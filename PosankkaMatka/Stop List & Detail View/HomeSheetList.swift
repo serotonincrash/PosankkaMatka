@@ -18,8 +18,7 @@ struct HomeSheetList: View {
     let search: String
     let stops: [Foli.Stop]
     let routes: [Foli.Route]
-    /// Precomputed nearby rows (see `NearbyStopsProvider`); empty cases are
-    /// disclosed by `stopsDisclosure` so the section never vanishes silently.
+    /// Precomputed nearby rows; empty cases are disclosed by `stopsDisclosure`.
     let nearbyStops: [StopWithDistance]
     /// Whether location is authorized (resolved by the parent).
     let isLocationAuthorized: Bool
@@ -76,21 +75,16 @@ struct HomeSheetList: View {
         }
         .navigationTitle(Text("Föli"))
         .navigationBarTitleDisplayMode(.inline)
-        // A filter change re-scopes the list, so collapse back to the capped view
-        // rather than leaving a possibly-huge expansion open.
+        // A filter change re-scopes the list; collapse any expansion.
         .onChange(of: searchFilter) { _, _ in
             showsAllNearbyStops = false
         }
         .toolbar {
-            // The proximity filter only affects the nearby (idle) list and needs
-            // a location to mean anything, so the control is shown only then.
             if showsFilterMenu {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        // A flat, single-select group under one header. Buttons are
-                        // used instead of a `Picker` so the options sit inline — a
-                        // `Picker` in a `Menu` nests behind its label as a submenu,
-                        // hiding the actual choices.
+                        // Buttons, not a `Picker`: a Picker in a Menu nests as
+                        // a submenu, hiding the options.
                         Section("Show stops within") {
                             distanceOption("Any distance", systemImage: "infinity", filter: .none)
                             distanceOption("500 m", systemImage: "location", filter: .proximity(500))
@@ -155,7 +149,7 @@ struct HomeSheetList: View {
 
     // MARK: - Empty / disclosure states
 
-    /// Full-sheet empty state, reached only while searching (see `isListEmpty`).
+    /// Full-sheet empty state (see `isListEmpty`).
     @ViewBuilder
     private var emptyState: some View {
         if search.isEmpty {

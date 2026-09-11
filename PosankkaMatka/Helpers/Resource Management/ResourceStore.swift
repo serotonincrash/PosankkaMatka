@@ -9,22 +9,20 @@ import Foundation
 import Observation
 import FoliBusUI
 
-/// A generic, observable owner of one async-loaded resource — `ResourceState`,
-/// the fetch, and error mapping; no domain logic (the client handles caching and
-/// dedup). The fetch is supplied per call because `@FoliService` only resolves
-/// once installed, so views pass it from `.task`/`.refreshable`.
+/// Observable owner of one async-loaded resource: state, error mapping, and
+/// timestamps. The fetch is passed per call because `@FoliService` resolves
+/// only once installed.
 @MainActor
 @Observable
 final class ResourceStore<T> {
     typealias Fetch = @Sendable () async throws -> T
 
     private(set) var state: ResourceState<T> = .loading
-    /// When the visible value was last fetched successfully — nil until then.
-    /// A failed refresh leaves it untouched, so it always describes the data's
-    /// actual age.
+    /// When the visible value was last fetched; failed refreshes leave it, so
+    /// it describes the data's actual age.
     private(set) var lastUpdated: Date?
-    /// The last fetch error, kept alongside any still-visible value so a failed
-    /// refresh can surface a banner instead of wiping the list. Cleared on success.
+    /// Last fetch error — surfaced as a banner while a value stays visible;
+    /// cleared on success.
     private(set) var lastError: Foli.APIError?
 
     /// Fetches only if not loaded (for `.task`, which re-runs on appear).
@@ -56,8 +54,8 @@ final class ResourceStore<T> {
         } catch {
             let foliError = error as? Foli.APIError ?? .networkError(error)
             lastError = foliError
-            // Full-screen failure only when there is no value to preserve
-            // (an initial load); a refresh failure leaves the list up.
+            // Full-screen failure only when nothing is loaded yet; a refresh
+            // failure leaves the list up.
             if state.value == nil {
                 state = .failure(foliError)
             }

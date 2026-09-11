@@ -45,7 +45,7 @@ struct StopView: View {
                                         Text(arrival.destinationDisplay)
                                         Spacer()
                                         // Ticks between polls so "N min" counts
-                                        // down instead of freezing at render time.
+                                        // down instead of freezing.
                                         TimelineView(.periodic(from: .now, by: 15)) { _ in
                                             Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
                                                 .font(.footnote)
@@ -57,10 +57,9 @@ struct StopView: View {
                                 HStack {
                                     Text("Arrivals")
                                     Spacer()
-                                    // "Updating…" while a fetch is in flight,
-                                    // else the wall-clock time of the data —
-                                    // not relative wording, which would read
-                                    // "now" for most of the 20 s poll cycle.
+                                    // "Updating…" mid-fetch, else wall-clock time —
+                                    // relative wording would read "now" most of
+                                    // the 20 s cycle.
                                     if arrivalsStore.isRefreshing {
                                         Text("Updating…")
                                             .font(.caption2)
@@ -75,9 +74,8 @@ struct StopView: View {
                                 }
                             }
                         }
-                        // Animate the poll diffs themselves — rows sliding as
-                        // departures pass and reorder — not just the load-state
-                        // change covered by the Group-level animation below.
+                        // Animate poll diffs (rows sliding/reordering), beyond
+                        // the load-state animation below.
                         .animation(.spring(.bouncy), value: arrivals)
                     }
 
@@ -90,10 +88,8 @@ struct StopView: View {
             await arrivalsStore.refresh(fetch)
         }
         .task {
-            // Initial load (drives the loading state), then live: the SM feed
-            // caches replies server-side for 15–30 s, so polling ~20 s keeps
-            // the list current without hammering it. Scoped to the card's
-            // lifetime (`.id(stop.id)` resets it per stop).
+            // Load, then poll: the SM feed caches server-side for 15–30 s, so
+            // ~20 s keeps the list current without hammering it.
             await arrivalsStore.load(fetch)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(20))
@@ -111,8 +107,8 @@ struct StopView: View {
         return { try await foli.fetchArrivals(for: stopId) }
     }
 
-    /// The route serving an arrival (`lineRef` == `route.shortName`); `nil` until
-    /// routes load or when unmatched, falling back to plain line text.
+    /// The route serving an arrival (`lineRef` == `route.shortName`); nil until
+    /// routes load or when unmatched (falls back to plain line text).
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
