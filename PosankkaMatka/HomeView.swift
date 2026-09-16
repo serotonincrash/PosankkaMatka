@@ -22,9 +22,16 @@ struct HomeView: View {
     @State private var stopsStore = ResourceStore<[Foli.Stop]>()
     @State private var routesStore = ResourceStore<[Foli.Route]>()
     @FoliService var foli
+    /// Associates the map with the scoped compass in the controls overlay;
+    /// connected by `.mapScope` on the containing ZStack.
+    @Namespace private var mapScope
 
     @State private var camera: MapCameraPosition = .automatic
     @State private var visibleRegion: MKCoordinateRegion?
+    /// Live camera from the last change (user or programmatic) — the zoom and
+    /// orientation to preserve when reframing. `visibleRegion` alone can't:
+    /// its span is the axis-aligned bounding box, inflated when rotated.
+    @State private var liveCamera: MapCamera?
     /// Markers currently drawn; recomputed only on meaningful camera changes.
     @State private var displayedStops: [Foli.Stop] = []
     /// Region that produced `displayedStops`; skips no-op recomputes.
@@ -57,6 +64,7 @@ struct HomeView: View {
                 MapView(
                     camera: $camera,
                     selectedStopID: $selectedStopID,
+                    mapScope: mapScope,
                     displayedStops: displayedStops,
                     boatStopIDs: boatStopIDs,
                     direction: routeDetail.selectedDirection,
@@ -66,9 +74,10 @@ struct HomeView: View {
                     vehicles: vehicleStore.displayVehicles(at: context.date),
                     lineRoutes: lineRoutes
                 )
-                .ignoresSafeArea()
+                .ignoresSafeArea(edges: .bottom)
                 .onMapCameraChange(frequency: .onEnd) { context in
                     visibleRegion = context.region
+                    liveCamera = context.camera
                     updateDisplayedStops(for: context.region)
                 }
                 .onChange(of: selectedStopID) { _, newValue in
@@ -97,6 +106,18 @@ struct HomeView: View {
                 vehicleStore.isPaused = phase != .active
             }
 
+            // Controls overlay, top-right: the scoped compass (bound to the
+            // map by `.mapScope` below) stacks above the custom locate button
+            // — custom because the native one centers the user at the map's
+            // midpoint, behind the sheets, with no tap hook to reframe.
+            VStack(spacing: 12) {
+                MapLocateButton(isAuthorized: locationManager.isAuthorized, action: recenterOnUser)
+                MapCompass(scope: mapScope)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, 16)
+
+
             SheetHost(
                 selectedStopID: $selectedStopID,
                 selectedRoute: $selectedRoute,
@@ -105,6 +126,7 @@ struct HomeView: View {
                 onCardDetentChange: reframeSelection
             )
         }
+        .mapScope(mapScope)
         .environment(locationManager)
         .environment(stopsStore)
         .environment(routesStore)
@@ -185,14 +207,71 @@ struct HomeView: View {
         }
     }
 
-    /// Reframes the selection for a changed card detent (stop card wins).
-    /// Fired by `SheetHost` from untracked context — never read from `body`.
-    private func reframeSelection() {
-        if let coordinate = stop?.stop.location?.toCLCoordinate() {
-            frameSelectedStop(at: coordinate)
+    /// Applies a selection/user framing: keeps the live camera's zoom and
+    /// orientation (captured from `onMapCameraChange`) — a `.region` move
+    /// snaps heading to north and re-fits the rotation-inflated bounding
+    /// span, which reads as a zoom reset. The center shift runs along the
+    /// screen axis (not due south) with the viewport's true height, so a
+    /// rotated map still seats the anchor above the sheet. Falls back to a
+    /// region move before any camera change has been observed.
+    private func moveCamera(anchor: CLLocationCoordinate2D, nudge: CGFloat) {
+        if let cam = liveCamera {
+            let heading = cam.heading * .pi / 180
+            // Longitude degrees shrink by cos(latitude): converts the shift's
+            // east component. Separately, the bounding span folds in the
+            // viewport's *width* when rotated, so the true height needs the
+            // height/width ratio to be recovered — hardcoded to a portrait
+            // phone's ~2 (a home-button SE's ~1.73 is the worst case).
+            let scale = max(cos(anchor.latitude * .pi / 180), 0.2)
+            // Bounding latitude span = width·|sin h| + height·|cos h|.
+            let bbox = visibleRegion?.span.latitudeDelta ?? Self.defaultSpan.latitudeDelta
+            let height = bbox / (abs(cos(heading)) + abs(sin(heading)) / 2)
+            // Screen-up unit vector in (east, north) components.
+            let (upEast, upNorth) = (sin(heading), cos(heading))
+            let center = CLLocationCoordinate2D(
+                latitude: anchor.latitude - nudge * height * upNorth,
+                longitude: anchor.longitude - nudge * height * upEast / scale
+            )
+            withAnimation {
+                camera = .camera(MapCamera(
+                    centerCoordinate: center,
+                    distance: cam.distance,
+                    heading: cam.heading,
+                    pitch: cam.pitch
+                ))
+            }
         } else {
-            frameSelectedDirection()
+            let latDelta = visibleRegion?.span.latitudeDelta ?? Self.defaultSpan.latitudeDelta
+            let center = CLLocationCoordinate2D(
+                latitude: anchor.latitude - latDelta * nudge,
+                longitude: anchor.longitude
+            )
+            let region = MKCoordinateRegion(center: center, span: visibleRegion?.span ?? Self.defaultSpan)
+            visibleRegion = region
+            withAnimation { camera = .region(region) }
         }
+    }
+
+    /// Reframes the selection for a changed card detent (stop card wins).
+    /// Only the center moves — zoom and orientation survive via `moveCamera`
+    /// — re-seating the selection in the newly-sized visible strip. Fired by
+    /// `SheetHost` from untracked context — never read from `body`.
+    private func reframeSelection() {
+        let anchor: CLLocationCoordinate2D
+        if let coordinate = stop?.stop.location?.toCLCoordinate() {
+            anchor = coordinate
+        } else if let direction = routeDetail.selectedDirection {
+            let coords = direction.path.isEmpty
+                ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
+                : direction.path
+            guard let center = MKCoordinateRegion(enclosing: coords)?.center else { return }
+            anchor = center
+        } else {
+            return
+        }
+        // Shift the center south so the anchor sits above the card.
+        let nudge = (1 - visibleFraction(for: sheetModel.cardDetent)) / 2
+        moveCamera(anchor: anchor, nudge: nudge)
     }
 
     /// Frames a stop above the card, keeping a deliberate close zoom or
@@ -313,6 +392,43 @@ struct HomeView: View {
                 return  // Task cancelled — stop polling.
             }
         }
+    }
+
+    /// The locate button's action: recenter on the user at the current zoom
+    /// and orientation, framed above whatever sheet is up.
+    private func recenterOnUser() {
+        guard locationManager.isAuthorized, let coordinate = locationManager.currentLocation else { return }
+        let detent = (stop != nil || selectedRoute != nil) ? sheetModel.cardDetent : sheetModel.listDetent
+        moveCamera(anchor: coordinate, nudge: (1 - visibleFraction(for: detent)) / 2)
+    }
+}
+
+/// Locate control: the native button centers the user at the map's midpoint,
+/// behind the sheets, with no tap hook to reframe.
+private struct MapLocateButton: View {
+    let isAuthorized: Bool
+    let action: () -> Void
+
+    private var label: some View {
+        Image(systemName: "location.fill")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(isAuthorized ? Color.accentColor : Color.secondary)
+            .frame(width: 44, height: 44)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            if #available(iOS 26.0, *) {
+                label.glassEffect(.regular.interactive(), in: Circle())
+            } else {
+                label
+                    .background(Circle().fill(.background))
+                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isAuthorized)
+        .accessibilityLabel("Show my location")
     }
 }
 

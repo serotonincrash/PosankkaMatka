@@ -14,6 +14,9 @@ import FoliBusUI
 struct MapView: View {
     @Binding var camera: MapCameraPosition
     @Binding var selectedStopID: Foli.Stop.ID?
+    /// Associates the map with the scoped compass in HomeView's controls
+    /// overlay (bound there via `.mapScope`).
+    var mapScope: Namespace.ID
     let displayedStops: [Foli.Stop]
     /// Stop IDs served by a boat route — rendered with a ferry glyph.
     let boatStopIDs: Set<Foli.Stop.ID>
@@ -39,10 +42,17 @@ struct MapView: View {
         Map(
             position: $camera,
             bounds: MapCameraBounds(minimumDistance: Self.minimumDistance, maximumDistance: Self.maximumDistance),
-            selection: $selectedStopID
+            selection: $selectedStopID,
+            scope: mapScope
         ) {
             UserAnnotation()
             mapContent
+        }
+        // Scale only: the compass + locate button live in HomeView's overlay
+        // (`.mapControls` hosts no custom views, and its locate button
+        // centers the user behind the sheets).
+        .mapControls {
+            MapScaleView()
         }
     }
 
