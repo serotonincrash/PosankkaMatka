@@ -117,7 +117,6 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
 
-
             SheetHost(
                 selectedStopID: $selectedStopID,
                 selectedRoute: $selectedRoute,
@@ -207,16 +206,12 @@ struct HomeView: View {
         }
     }
 
-    /// Applies a selection/user framing: keeps the live camera's zoom and
-    /// orientation (captured from `onMapCameraChange`) — a `.region` move
-    /// snaps heading to north and re-fits the rotation-inflated bounding
-    /// span, which reads as a zoom reset. The center shift runs along the
-    /// screen axis (not due south) with the viewport's true height, so a
-    /// rotated map still seats the anchor above the sheet. Falls back to a
-    /// region move before any camera change has been observed.
+    /// Applies a selection/user framing: re-issues the live camera's zoom and
+    /// orientation with only the center shifted along the screen axis, so
+    /// rotated maps neither zoom-reset nor mis-seat above the sheet.
     private func moveCamera(anchor: CLLocationCoordinate2D, nudge: CGFloat) {
-        if let cam = liveCamera {
-            let heading = cam.heading * .pi / 180
+        guard let cam = liveCamera else { return }
+        let heading = cam.heading * .pi / 180
             // Longitude degrees shrink by cos(latitude): converts the shift's
             // east component. Separately, the bounding span folds in the
             // viewport's *width* when rotated, so the true height needs the
@@ -240,16 +235,6 @@ struct HomeView: View {
                     pitch: cam.pitch
                 ))
             }
-        } else {
-            let latDelta = visibleRegion?.span.latitudeDelta ?? Self.defaultSpan.latitudeDelta
-            let center = CLLocationCoordinate2D(
-                latitude: anchor.latitude - latDelta * nudge,
-                longitude: anchor.longitude
-            )
-            let region = MKCoordinateRegion(center: center, span: visibleRegion?.span ?? Self.defaultSpan)
-            visibleRegion = region
-            withAnimation { camera = .region(region) }
-        }
     }
 
     /// Reframes the selection for a changed card detent (stop card wins).
