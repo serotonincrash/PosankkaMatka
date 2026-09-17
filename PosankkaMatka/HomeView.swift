@@ -11,8 +11,8 @@ import MapKit
 import FoliBusUI
 
 struct HomeView: View {
-    /// Initial span when centering on the user's location.
-    private static let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+    /// Initial span when centering on the user's location (~1.7 km tall).
+    private static let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.015, longitudeDelta: 0.015)
     /// Span (degrees) at or below which markers show; further out, none.
     private static let markerThreshold: CLLocationDegrees = 0.06
     /// Street-level span for a stop selected while zoomed out.
