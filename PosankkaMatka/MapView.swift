@@ -143,17 +143,28 @@ struct MapView: View {
             .overlay(Circle().stroke(.white, lineWidth: 2))
     }
 
-    /// Vehicle puck: the `RouteBadge` idiom; stroke + shadow lift it off the line.
+    /// Shared monospaced puck font, so the hidden reference and visible text
+    /// measure identically (same trick as `RouteBadge`).
+    private var puckFont: Font { .caption2.weight(.bold).monospaced() }
+
+    /// Vehicle puck: the `RouteBadge` idiom — hidden "000" reserves a
+    /// three-digit width, longer codes (e.g. "Lautta") expand naturally.
+    /// Stroke + shadow lift it off the line.
     private func vehiclePin(for vehicle: Foli.VehicleLocation) -> some View {
         let route = lineRoutes[vehicle.lineRef]
-        return Text(vehicle.lineRef)
-            .font(.caption2.weight(.bold).monospaced())
-            .foregroundStyle(route?.textColor ?? .white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(route?.color ?? .accentColor, in: Capsule())
-            .overlay(Capsule().stroke(.white, lineWidth: 1.5))
-            .shadow(radius: 2)
+        return ZStack {
+            Text("000")
+                .font(puckFont)
+                .hidden()
+            Text(vehicle.lineRef)
+                .font(puckFont)
+                .foregroundStyle(route?.textColor ?? .white)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(route?.color ?? .accentColor, in: Capsule())
+        .overlay(Capsule().stroke(.white, lineWidth: 1.5))
+        .shadow(radius: 2)
     }
 
 }
