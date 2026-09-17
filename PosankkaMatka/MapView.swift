@@ -9,26 +9,30 @@ import SwiftUI
 import MapKit
 import FoliBusUI
 
-/// The map surface: user location, viewport stop markers, and — when a route is
-/// selected — its polyline, start/end pins, and route stops (dots when zoomed out,
-/// tappable markers when zoomed in).
+/// The map surface: user location, viewport stop markers, the selected route's
+/// line/pins/stops, and live vehicle pucks.
 struct MapView: View {
     @Binding var camera: MapCameraPosition
     @Binding var selectedStopID: Foli.Stop.ID?
+    /// Associates the map with the scoped compass in HomeView's controls
+    /// overlay (bound there via `.mapScope`).
+    var mapScope: Namespace.ID
     let displayedStops: [Foli.Stop]
     /// Stop IDs served by a boat route — rendered with a ferry glyph.
     let boatStopIDs: Set<Foli.Stop.ID>
-    /// The selected route direction (its path + start/end pins), or nil when no
-    /// route is selected.
+    /// The selected route direction, or nil when none.
     let direction: RouteDirection?
     /// The selected route's color, used for the polyline, stop dots, and markers.
     let routeColor: Color
-    /// Whether the camera is zoomed in past the marker threshold — route stops
-    /// render as tappable markers when true, else as simple dots.
+    /// Zoomed past the threshold: route stops render as tappable markers, else dots.
     let isZoomedIn: Bool
-    /// Whether a route is currently selected. Viewport markers show only when
-    /// this is false (they must not leak through while a route is still loading).
+    /// Viewport markers show only when false (they'd leak through while a route loads).
     let routeIsSelected: Bool
+    /// Live vehicles (SIRI VM) with their interpolated draw positions, shown
+    /// while a detail card is open.
+    let vehicles: [DisplayedVehicle]
+    /// The route per line number (SIRI `lineRef` == short name), for pin colors.
+    let lineRoutes: [String: Foli.Route]
 
     /// Zoom bounds (camera distance in meters): street level to region level.
     private static let minimumDistance: Double = 500
@@ -38,10 +42,17 @@ struct MapView: View {
         Map(
             position: $camera,
             bounds: MapCameraBounds(minimumDistance: Self.minimumDistance, maximumDistance: Self.maximumDistance),
-            selection: $selectedStopID
+            selection: $selectedStopID,
+            scope: mapScope
         ) {
             UserAnnotation()
             mapContent
+        }
+        // Scale only: the compass + locate button live in HomeView's overlay
+        // (`.mapControls` hosts no custom views, and its locate button
+        // centers the user behind the sheets).
+        .mapControls {
+            MapScaleView()
         }
     }
 
@@ -63,8 +74,7 @@ struct MapView: View {
                     }
                 }
             } else {
-                // Use an offset identity (not `stop.id`) so these dots aren't
-                // implicitly tagged and therefore remain non-selectable.
+                // Offset identity: untagged, so the dots stay non-selectable.
                 ForEach(Array(direction.stops.enumerated()), id: \.offset) { _, stop in
                     if let coordinate = stop.location?.toCLCoordinate() {
                         Annotation(stop.name, coordinate: coordinate) {
@@ -91,16 +101,21 @@ struct MapView: View {
         if !routeIsSelected {
             ForEach(displayedStops) { stop in
                 if let coordinate = stop.location?.toCLCoordinate() {
-                    // System Marker keeps MapKit's label decluttering (a compact
-                    // bus glyph when dense) and shows the stop name when selected.
-                    // TODO: Finnish stops use distinctive real-world signage;
-                    // explore representing that here (custom Annotation with a
-                    // Föli-style sign glyph) instead of the generic bus/boat glyphs.
+                    // System Marker: MapKit's label decluttering + selected name.
+                    // TODO: model Föli's real stop signage instead of bus/boat glyphs.
                     Marker(stop.name, systemImage: markerSystemImage(for: stop), coordinate: coordinate)
                         .tint(boatStopIDs.contains(stop.id) ? .blue : .red)
                         .tag(stop.id)
                 }
             }
+        }
+        // Vehicles last, on top; untagged (non-selectable). The store
+        // interpolates positions between polls, so these arrive pre-blended.
+        ForEach(vehicles) { displayed in
+            Annotation(displayed.vehicle.publishedLineName, coordinate: displayed.coordinate) {
+                vehiclePin(for: displayed.vehicle)
+            }
+            .annotationTitles(.hidden)
         }
     }
 
@@ -120,13 +135,36 @@ struct MapView: View {
             .shadow(radius: 2)
     }
 
-    /// A route stop, drawn as a small route-colored dot. Non-interactive — the
-    /// zoomed-in markers are the tappable form.
+    /// Route-colored dot; the zoomed-in markers are the tappable form.
     private var routeStopDot: some View {
         Circle()
             .fill(routeColor)
             .frame(width: 12, height: 12)
             .overlay(Circle().stroke(.white, lineWidth: 2))
+    }
+
+    /// Shared monospaced puck font, so the hidden reference and visible text
+    /// measure identically (same trick as `RouteBadge`).
+    private var puckFont: Font { .caption2.weight(.bold).monospaced() }
+
+    /// Vehicle puck: the `RouteBadge` idiom — hidden "000" reserves a
+    /// three-digit width, longer codes (e.g. "Lautta") expand naturally.
+    /// Stroke + shadow lift it off the line.
+    private func vehiclePin(for vehicle: Foli.VehicleLocation) -> some View {
+        let route = lineRoutes[vehicle.lineRef]
+        return ZStack {
+            Text("000")
+                .font(puckFont)
+                .hidden()
+            Text(vehicle.lineRef)
+                .font(puckFont)
+                .foregroundStyle(route?.textColor ?? .white)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(route?.color ?? .accentColor, in: Capsule())
+        .overlay(Capsule().stroke(.white, lineWidth: 1.5))
+        .shadow(radius: 2)
     }
 
 }

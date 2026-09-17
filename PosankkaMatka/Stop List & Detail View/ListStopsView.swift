@@ -46,9 +46,8 @@ struct ListStopsView: View {
                     selectedRoute: $selectedRoute
                 )
                 .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search stops or routes"))
-                // Recompute off the `body` path. Keyed on the stop set, the
-                // rounded location (sub-meter jitter is ignored), and the filter,
-                // so this only reruns when an input actually changed.
+                // Recompute off the body path, keyed on stop set + rounded
+                // location + filter (sub-meter jitter ignored).
                 .task(id: nearbyInputs(stops)) {
                     nearbyStops = nearbyRows(for: stops)
                 }

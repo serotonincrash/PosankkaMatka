@@ -33,7 +33,7 @@ struct StopView: View {
                         ContentUnavailableView("No Arrivals", systemImage: "pc")
                     } else {
                         List {
-                            Section("Arrivals") {
+                            Section {
                                 ForEach(arrivals) { arrival in
                                     HStack(spacing: 12) {
                                         if let route = route(for: arrival) {
@@ -44,27 +44,64 @@ struct StopView: View {
                                         }
                                         Text(arrival.destinationDisplay)
                                         Spacer()
-                                        Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
-                                            .font(.footnote)
+                                        // Ticks between polls so "N min" counts
+                                        // down instead of freezing.
+                                        TimelineView(.periodic(from: .now, by: 15)) { _ in
+                                            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
+                                                .font(.footnote)
+                                                .monospacedDigit()
+                                        }
                                     }
                                 }
-
+                            } header: {
+                                HStack {
+                                    Text("Arrivals")
+                                    Spacer()
+                                    // "Updating…" mid-fetch, else wall-clock time —
+                                    // relative wording would read "now" most of
+                                    // the 20 s cycle.
+                                    if arrivalsStore.isRefreshing {
+                                        Text("Updating…")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .textCase(nil)
+                                    } else if let updated = arrivalsStore.lastUpdated {
+                                        Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .textCase(nil)
+                                    }
+                                }
                             }
                         }
+                        // Animate poll diffs (rows sliding/reordering), beyond
+                        // the load-state animation below.
+                        .animation(.spring(.bouncy), value: arrivals)
                     }
 
                 }
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))}
         }
-        .animation(.spring(.bouncy), value: arrivalsStore.state)
+        // .smooth, not .bouncy: an overshooting spring pushes the fresh list
+        // past its resting spot for a frame, which the List reads as scrolled
+        // — the nav bar hairline flashes in under the title.
+        .animation(.smooth, value: arrivalsStore.state)
         .refreshable {
             await arrivalsStore.refresh(fetch)
         }
         .task {
+            // Load, then poll: the SM feed caches server-side for 15–30 s, so
+            // ~20 s keeps the list current without hammering it.
             await arrivalsStore.load(fetch)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled else { return }
+                await arrivalsStore.refresh(fetch)
+            }
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
+        .navigationBarTitleDisplayMode(.inline)
 
     }
 
@@ -74,8 +111,8 @@ struct StopView: View {
         return { try await foli.fetchArrivals(for: stopId) }
     }
 
-    /// The route serving an arrival (`lineRef` == `route.shortName`); `nil` until
-    /// routes load or when unmatched, falling back to plain line text.
+    /// The route serving an arrival (`lineRef` == `route.shortName`); nil until
+    /// routes load or when unmatched (falls back to plain line text).
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
