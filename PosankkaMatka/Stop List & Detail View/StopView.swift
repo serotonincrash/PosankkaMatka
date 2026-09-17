@@ -83,7 +83,10 @@ struct StopView: View {
             case .failure(let error):
                 ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))}
         }
-        .animation(.spring(.bouncy), value: arrivalsStore.state)
+        // .smooth, not .bouncy: an overshooting spring pushes the fresh list
+        // past its resting spot for a frame, which the List reads as scrolled
+        // — the nav bar hairline flashes in under the title.
+        .animation(.smooth, value: arrivalsStore.state)
         .refreshable {
             await arrivalsStore.refresh(fetch)
         }
@@ -98,6 +101,7 @@ struct StopView: View {
             }
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
+        .navigationBarTitleDisplayMode(.inline)
 
     }
 

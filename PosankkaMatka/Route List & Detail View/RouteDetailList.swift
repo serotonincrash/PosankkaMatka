@@ -45,9 +45,10 @@ struct RouteDetailList: View {
 
             content
         }
-        // "Route N"; large like the stop title — the card's bar keeps one
+        // "Route N"; inline like the stop title — the card's bar keeps one
         // display mode across content swaps.
         .navigationTitle("Route \(route.shortName)")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder

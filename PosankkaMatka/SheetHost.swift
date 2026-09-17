@@ -14,6 +14,9 @@ import FoliBusUI
 @MainActor
 @Observable
 final class SheetModel {
+    /// The peek detent. Inline titles leave the peek at the pre-summary
+    /// height for now; it gets re-measured once a summary line exists.
+    static let peek = PresentationDetent.height(110)
     /// Detent of the master lists sheet.
     var listDetent: PresentationDetent = .medium
     /// Detent of the detail card (stop or route content).
@@ -46,7 +49,7 @@ struct SheetHost: View {
                     NavigationStack {
                         ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
                     }
-                    .presentationDetents([.height(110), .medium], selection: $sheetModel.listDetent)
+                    .presentationDetents([SheetModel.peek, .medium], selection: $sheetModel.listDetent)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .interactiveDismissDisabled()
                 }
@@ -93,7 +96,7 @@ struct SheetHost: View {
                 }
             }
         }
-        .presentationDetents([.height(110), .medium, .large], selection: $sheetModel.cardDetent)
+        .presentationDetents([SheetModel.peek, .medium, .large], selection: $sheetModel.cardDetent)
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled()

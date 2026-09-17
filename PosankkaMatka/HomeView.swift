@@ -305,8 +305,10 @@ struct HomeView: View {
 
     /// Fraction of map height visible above the card. `.large` frames like
     /// medium: fitting into its sliver would zoom out ~4× and flatten turns.
+    /// Peek's 0.85 is a cross-model approximation (110 pt covers 12–16% of
+    /// the screen); it feeds a nudge heuristic, so the slop is imperceptible.
     private func visibleFraction(for detent: PresentationDetent) -> CGFloat {
-        detent == .height(110) ? 0.85 : 0.5
+        detent == SheetModel.peek ? 0.85 : 0.5
     }
 
     // MARK: - Helpers
