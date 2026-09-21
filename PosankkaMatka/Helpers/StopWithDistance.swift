@@ -25,8 +25,6 @@ struct StopWithDistance: Identifiable, Hashable {
     /// Distance for display, or `nil` when unset (e.g. search results).
     var distanceText: String? {
         guard let distance else { return nil }
-        return distance < 1000
-            ? "\(Int(distance)) m"
-            : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km"
+        return distance.rounded().formattedDistance
     }
 }

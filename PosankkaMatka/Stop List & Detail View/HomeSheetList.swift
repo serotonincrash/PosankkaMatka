@@ -175,7 +175,7 @@ struct HomeSheetList: View {
             }
         } else if case .proximity(let meters) = searchFilter {
             HStack {
-                Text("No stops within \(formattedDistance(meters))")
+                Text("No stops within \(meters.formattedDistance)")
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Show all") { searchFilter = .none }
@@ -184,11 +184,6 @@ struct HomeSheetList: View {
             Text("No stops available")
                 .foregroundStyle(.secondary)
         }
-    }
-
-    /// "500 m" / "2 km" — matches the labels used in the filter menu.
-    private func formattedDistance(_ meters: Double) -> String {
-        meters < 1000 ? "\(Int(meters)) m" : "\(Int(meters / 1000)) km"
     }
 
     /// A single-select distance option; the leading icon becomes a checkmark when active.
