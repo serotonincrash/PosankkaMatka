@@ -72,6 +72,8 @@ struct StopView: View {
                                             .textCase(nil)
                                     }
                                 }
+                            } footer: {
+                                Text("Live stop and bus data refreshes periodically and may not always be accurate.")
                             }
                         }
                         // Animate poll diffs (rows sliding/reordering), beyond

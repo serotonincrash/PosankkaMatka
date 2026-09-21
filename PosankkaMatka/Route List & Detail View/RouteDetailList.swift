@@ -66,17 +66,21 @@ struct RouteDetailList: View {
                 // No section header — the direction is already shown by the
                 // picker (or the single-direction subtitle) above.
                 List {
-                    ForEach(direction.stops) { stop in
-                        Button {
-                            selectedStopID = stop.id
-                        } label: {
-                            HStack {
-                                Text(stop.id).monospaced()
-                                Text(stop.name)
-                                Spacer()
+                    Section {
+                        ForEach(direction.stops) { stop in
+                            Button {
+                                selectedStopID = stop.id
+                            } label: {
+                                HStack {
+                                    Text(stop.id).monospaced()
+                                    Text(stop.name)
+                                    Spacer()
+                                }
                             }
+                            .tint(.primary)
                         }
-                        .tint(.primary)
+                    } footer: {
+                        Text("Live stop and bus data refreshes periodically and may not always be accurate.")
                     }
                 }
             } else {
