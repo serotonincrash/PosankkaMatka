@@ -78,7 +78,10 @@ struct MapView: View {
                 ForEach(Array(direction.stops.enumerated()), id: \.offset) { _, stop in
                     if let coordinate = stop.location?.toCLCoordinate() {
                         Annotation(stop.name, coordinate: coordinate) {
+                            // Ambient summary at overview zoom — the tappable
+                            // markers carry the accessible stop identity.
                             routeStopDot
+                                .accessibilityHidden(true)
                         }
                         .annotationTitles(.hidden)
                     }
@@ -87,12 +90,14 @@ struct MapView: View {
             if let start = direction.start {
                 Annotation("Start", coordinate: start) {
                     routeEndpointPin(systemImage: "smallcircle.filled.circle.fill")
+                        .accessibilityLabel("Route start")
                 }
                 .annotationTitles(.hidden)
             }
             if let end = direction.end {
                 Annotation("End", coordinate: end) {
                     routeEndpointPin(systemImage: "flag.checkered")
+                        .accessibilityLabel("Route end")
                 }
                 .annotationTitles(.hidden)
             }
@@ -163,8 +168,9 @@ struct MapView: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(route?.color ?? .accentColor, in: Capsule())
-        .overlay(Capsule().stroke(.white, lineWidth: 1.5))
-        .shadow(radius: 2)
+            .overlay(Capsule().stroke(.white, lineWidth: 1.5))
+            .shadow(radius: 2)
+            .accessibilityLabel("Line \(vehicle.lineRef) vehicle")
     }
 
 }
