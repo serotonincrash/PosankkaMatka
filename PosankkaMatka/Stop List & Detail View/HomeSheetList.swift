@@ -52,6 +52,7 @@ struct HomeSheetList: View {
                                     // VoiceOver reads the full phrase; Voice
                                     // Control can target the short forms.
                                     .accessibilityLabel(stopWithDistance.spokenDescription)
+                                    .accessibilityHint("Shows live arrivals for this stop")
                                     .accessibilityInputLabels([
                                         "\(stopWithDistance.stop.id) \(stopWithDistance.stop.name)",
                                         stopWithDistance.stop.name
@@ -82,6 +83,7 @@ struct HomeSheetList: View {
                                 // VoiceOver reads the full phrase; Voice
                                 // Control can target the short forms.
                                 .accessibilityLabel(route.spokenDescription)
+                                .accessibilityHint("Opens the route's stops and live vehicles")
                                 .accessibilityInputLabels([
                                     "Route \(route.shortName)",
                                     route.longName
@@ -126,6 +128,7 @@ struct HomeSheetList: View {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
                     .accessibilityLabel("Filter stops by distance")
+                    .accessibilityHint("Sets the maximum distance for nearby stops")
                 }
             }
         }
@@ -204,6 +207,7 @@ struct HomeSheetList: View {
                         UIApplication.shared.open(url)
                     }
                 }
+                .accessibilityHint("Opens this app's system settings")
             }
         } else if case .proximity(let meters) = searchFilter {
             HStack {
@@ -211,6 +215,7 @@ struct HomeSheetList: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Show all") { searchFilter = .none }
+                    .accessibilityHint("Clears the distance filter")
             }
         } else {
             Text("No stops available")

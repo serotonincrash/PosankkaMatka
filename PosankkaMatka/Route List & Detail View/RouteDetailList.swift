@@ -45,6 +45,7 @@ struct RouteDetailList: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+                .accessibilityHint("Switches which direction's stops are shown")
             }
 
             content
@@ -86,6 +87,7 @@ struct RouteDetailList: View {
                             // Same phrasing as the master list's stop rows;
                             // Voice Control gets the short forms.
                             .accessibilityLabel(StopWithDistance(stop).spokenDescription)
+                            .accessibilityHint("Shows live arrivals for this stop")
                             .accessibilityInputLabels([
                                 "\(stop.id) \(stop.name)",
                                 stop.name

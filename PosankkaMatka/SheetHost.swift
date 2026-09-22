@@ -138,5 +138,6 @@ private struct CardCloseButton: View {
             Image(systemName: "xmark")
         }
         .accessibilityLabel("Close")
+        .accessibilityHint("Returns to the stop and route lists")
     }
 }
