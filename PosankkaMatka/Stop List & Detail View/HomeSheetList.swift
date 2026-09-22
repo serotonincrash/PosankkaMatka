@@ -38,7 +38,7 @@ struct HomeSheetList: View {
             } else {
                 List {
                     if showsStopsSection {
-                        Section(stopSectionTitle) {
+                        Section {
                             if stopRows.isEmpty {
                                 stopsDisclosure
                             } else {
@@ -49,6 +49,14 @@ struct HomeSheetList: View {
                                         StopRow(stopWithDistance: stopWithDistance)
                                     }
                                     .tint(.primary)
+                                    // VoiceOver reads the full phrase; Voice
+                                    // Control can target the short forms.
+                                    .accessibilityLabel(stopWithDistance.spokenDescription)
+                                    .accessibilityHint("Shows live arrivals for this stop")
+                                    .accessibilityInputLabels([
+                                        "\(stopWithDistance.stop.id) \(stopWithDistance.stop.name)",
+                                        stopWithDistance.stop.name
+                                    ])
                                 }
                                 if showsNearbyDisclosure {
                                     Button("Show all \(stopRows.count) stops") {
@@ -56,10 +64,15 @@ struct HomeSheetList: View {
                                     }
                                 }
                             }
+                        } header: {
+                            // Header trait: VoiceOver's Headings rotor jumps
+                            // between sections instead of swiping every row.
+                            Text(stopSectionTitle)
+                                .accessibilityAddTraits(.isHeader)
                         }
                     }
                     if !routeRows.isEmpty {
-                        Section("Routes") {
+                        Section {
                             ForEach(routeRows) { route in
                                 Button {
                                     selectedRoute = route
@@ -67,7 +80,18 @@ struct HomeSheetList: View {
                                     RouteRow(route: route)
                                 }
                                 .tint(.primary)
+                                // VoiceOver reads the full phrase; Voice
+                                // Control can target the short forms.
+                                .accessibilityLabel(route.spokenDescription)
+                                .accessibilityHint("Opens the route's stops and live vehicles")
+                                .accessibilityInputLabels([
+                                    "Route \(route.shortName)",
+                                    route.longName
+                                ])
                             }
+                        } header: {
+                            Text("Routes")
+                                .accessibilityAddTraits(.isHeader)
                         }
                     }
                 }
@@ -83,17 +107,28 @@ struct HomeSheetList: View {
             if showsFilterMenu {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        // Buttons, not a `Picker`: a Picker in a Menu nests as
-                        // a submenu, hiding the options.
+                        // Inline Picker, not bare Buttons: a Picker in a Menu
+                        // nests as a submenu UNLESS `.inline` — which instead
+                        // renders flat and checkmarks (and announces as
+                        // selected) the active option natively.
                         Section("Show stops within") {
-                            distanceOption("Any distance", systemImage: "infinity", filter: .none)
-                            distanceOption("500 m", systemImage: "location", filter: .proximity(500))
-                            distanceOption("1 km", systemImage: "location", filter: .proximity(1000))
-                            distanceOption("2 km", systemImage: "location", filter: .proximity(2000))
+                            Picker("Distance", selection: $searchFilter) {
+                                Label("Any distance", systemImage: "infinity")
+                                    .tag(SortState.none)
+                                Label("500 m", systemImage: "location")
+                                    .tag(SortState.proximity(500))
+                                Label("1 km", systemImage: "location")
+                                    .tag(SortState.proximity(1000))
+                                Label("2 km", systemImage: "location")
+                                    .tag(SortState.proximity(2000))
+                            }
+                            .pickerStyle(.inline)
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
+                    .accessibilityLabel("Filter stops by distance")
+                    .accessibilityHint("Sets the maximum distance for nearby stops")
                 }
             }
         }
@@ -172,31 +207,19 @@ struct HomeSheetList: View {
                         UIApplication.shared.open(url)
                     }
                 }
+                .accessibilityHint("Opens this app's system settings")
             }
         } else if case .proximity(let meters) = searchFilter {
             HStack {
-                Text("No stops within \(formattedDistance(meters))")
+                Text("No stops within \(meters.formattedDistance)")
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Show all") { searchFilter = .none }
+                    .accessibilityHint("Clears the distance filter")
             }
         } else {
             Text("No stops available")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    /// "500 m" / "2 km" — matches the labels used in the filter menu.
-    private func formattedDistance(_ meters: Double) -> String {
-        meters < 1000 ? "\(Int(meters)) m" : "\(Int(meters / 1000)) km"
-    }
-
-    /// A single-select distance option; the leading icon becomes a checkmark when active.
-    private func distanceOption(_ title: String, systemImage: String, filter: SortState) -> some View {
-        Button {
-            searchFilter = filter
-        } label: {
-            Label(title, systemImage: searchFilter == filter ? "checkmark" : systemImage)
         }
     }
 
@@ -210,6 +233,7 @@ struct HomeSheetList: View {
                 Image(systemName: "signpost.right.fill")
                     .foregroundStyle(.secondary)
                     .imageScale(.small)
+                    .accessibilityHidden(true)
                 Text(stopWithDistance.stop.id).monospaced()
                 Text(stopWithDistance.stop.name)
                 Spacer()

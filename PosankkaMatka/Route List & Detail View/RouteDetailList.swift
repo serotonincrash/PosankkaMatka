@@ -15,6 +15,8 @@ struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
     @Environment(RouteDetailStore.self) private var routeDetail
+    /// Steers VoiceOver past the sheet's grabber on appear.
+    @AccessibilityFocusState private var focusSubtitle: Bool
 
     var body: some View {
         @Bindable var routeDetail = routeDetail
@@ -30,6 +32,8 @@ struct RouteDetailList: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, routeDetail.allDirections.count > 1 ? 4 : 8)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusSubtitle)
             }
             // Pinned above the list so it stays visible while the stops scroll.
             if routeDetail.allDirections.count > 1 {
@@ -41,6 +45,7 @@ struct RouteDetailList: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+                .accessibilityHint("Switches which direction's stops are shown")
             }
 
             content
@@ -49,6 +54,7 @@ struct RouteDetailList: View {
         // display mode across content swaps.
         .navigationTitle("Route \(route.shortName)")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { focusSubtitle = true }
     }
 
     @ViewBuilder
@@ -66,17 +72,29 @@ struct RouteDetailList: View {
                 // No section header — the direction is already shown by the
                 // picker (or the single-direction subtitle) above.
                 List {
-                    ForEach(direction.stops) { stop in
-                        Button {
-                            selectedStopID = stop.id
-                        } label: {
-                            HStack {
-                                Text(stop.id).monospaced()
-                                Text(stop.name)
-                                Spacer()
+                    Section {
+                        ForEach(direction.stops) { stop in
+                            Button {
+                                selectedStopID = stop.id
+                            } label: {
+                                HStack {
+                                    Text(stop.id).monospaced()
+                                    Text(stop.name)
+                                    Spacer()
+                                }
                             }
+                            .tint(.primary)
+                            // Same phrasing as the master list's stop rows;
+                            // Voice Control gets the short forms.
+                            .accessibilityLabel(StopWithDistance(stop).spokenDescription)
+                            .accessibilityHint("Shows live arrivals for this stop")
+                            .accessibilityInputLabels([
+                                "\(stop.id) \(stop.name)",
+                                stop.name
+                            ])
                         }
-                        .tint(.primary)
+                    } footer: {
+                        Text("Live stop and bus data refreshes periodically and may not always be accurate.")
                     }
                 }
             } else {

@@ -25,8 +25,14 @@ struct StopWithDistance: Identifiable, Hashable {
     /// Distance for display, or `nil` when unset (e.g. search results).
     var distanceText: String? {
         guard let distance else { return nil }
-        return distance < 1000
-            ? "\(Int(distance)) m"
-            : "\((distance / 1000).formatted(toDecimalPlaces: 2)) km"
+        return distance.rounded().formattedDistance
+    }
+
+    /// Row label for screen readers; distance included when known.
+    var spokenDescription: String {
+        if let distanceText {
+            return "Stop ID \(stop.id), \(stop.name), \(distanceText) away"
+        }
+        return "Stop ID \(stop.id), \(stop.name)"
     }
 }

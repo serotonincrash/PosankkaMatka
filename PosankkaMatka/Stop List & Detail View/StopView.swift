@@ -12,6 +12,10 @@ struct StopView: View {
     @FoliService var foli
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Steers VoiceOver to the arrivals header once it exists (the card
+    /// presents with a spinner, so there's nothing earlier to focus).
+    @AccessibilityFocusState private var focusArrivals: Bool
 
     var body: some View {
         Group {
@@ -52,10 +56,14 @@ struct StopView: View {
                                                 .monospacedDigit()
                                         }
                                     }
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel(spokenArrival(arrival))
                                 }
                             } header: {
                                 HStack {
                                     Text("Arrivals")
+                                        .accessibilityAddTraits(.isHeader)
+                                        .accessibilityFocused($focusArrivals)
                                     Spacer()
                                     // "Updating…" mid-fetch, else wall-clock time —
                                     // relative wording would read "now" most of
@@ -72,11 +80,13 @@ struct StopView: View {
                                             .textCase(nil)
                                     }
                                 }
+                            } footer: {
+                                Text("Live stop and bus data refreshes periodically and may not always be accurate.")
                             }
                         }
                         // Animate poll diffs (rows sliding/reordering), beyond
                         // the load-state animation below.
-                        .animation(.spring(.bouncy), value: arrivals)
+                        .animation(reduceMotion ? nil : .spring(.bouncy), value: arrivals)
                     }
 
                 }
@@ -86,7 +96,7 @@ struct StopView: View {
         // .smooth, not .bouncy: an overshooting spring pushes the fresh list
         // past its resting spot for a frame, which the List reads as scrolled
         // — the nav bar hairline flashes in under the title.
-        .animation(.smooth, value: arrivalsStore.state)
+        .animation(reduceMotion ? nil : .smooth, value: arrivalsStore.state)
         .refreshable {
             await arrivalsStore.refresh(fetch)
         }
@@ -102,6 +112,11 @@ struct StopView: View {
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
         .navigationBarTitleDisplayMode(.inline)
+        // First arrival only: focus the header when the list materializes;
+        // poll refreshes (success → success) must never yank focus back.
+        .onChange(of: arrivalsStore.state) { old, _ in
+            if case .loading = old { focusArrivals = true }
+        }
 
     }
 
@@ -116,5 +131,26 @@ struct StopView: View {
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
+    }
+
+    /// Row label for screen readers, with spoken time phrasing ("Line 32 to
+    /// Kauppatori, departing in 5 minutes"). Buckets mirror
+    /// `formattedInterval` but in words — "5 min" reads poorly aloud.
+    private func spokenArrival(_ arrival: Foli.Arrival) -> String {
+        let line = route(for: arrival)?.shortName ?? arrival.lineRef
+        let interval = arrival.expectedDepartureDate.timeIntervalSince(.now)
+        let minutes = Int((interval / 60).rounded())
+        let head = "Line \(line) to \(arrival.destinationDisplay)"
+        if interval <= 0 {
+            let ago = abs(minutes)
+            return "\(head), departed \(ago) minute\(ago == 1 ? "" : "s") ago"
+        }
+        if minutes >= 60 {
+            let clock = arrival.expectedDepartureDate.formatted(date: .omitted, time: .shortened)
+            return "\(head), departing at \(clock)"
+        }
+        return minutes == 0
+            ? "\(head), departing now"
+            : "\(head), departing in \(minutes) minute\(minutes == 1 ? "" : "s")"
     }
 }
