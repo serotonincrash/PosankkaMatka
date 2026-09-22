@@ -83,6 +83,13 @@ struct RouteDetailList: View {
                                 }
                             }
                             .tint(.primary)
+                            // Same phrasing as the master list's stop rows;
+                            // Voice Control gets the short forms.
+                            .accessibilityLabel(StopWithDistance(stop).spokenDescription)
+                            .accessibilityInputLabels([
+                                "\(stop.id) \(stop.name)",
+                                stop.name
+                            ])
                         }
                     } footer: {
                         Text("Live stop and bus data refreshes periodically and may not always be accurate.")

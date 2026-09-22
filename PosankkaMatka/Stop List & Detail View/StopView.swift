@@ -56,6 +56,8 @@ struct StopView: View {
                                                 .monospacedDigit()
                                         }
                                     }
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel(spokenArrival(arrival))
                                 }
                             } header: {
                                 HStack {
@@ -129,5 +131,26 @@ struct StopView: View {
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
+    }
+
+    /// Row label for screen readers, with spoken time phrasing ("Line 32 to
+    /// Kauppatori, departing in 5 minutes"). Buckets mirror
+    /// `formattedInterval` but in words — "5 min" reads poorly aloud.
+    private func spokenArrival(_ arrival: Foli.Arrival) -> String {
+        let line = route(for: arrival)?.shortName ?? arrival.lineRef
+        let interval = arrival.expectedDepartureDate.timeIntervalSince(.now)
+        let minutes = Int((interval / 60).rounded())
+        let head = "Line \(line) to \(arrival.destinationDisplay)"
+        if interval <= 0 {
+            let ago = abs(minutes)
+            return "\(head), departed \(ago) minute\(ago == 1 ? "" : "s") ago"
+        }
+        if minutes >= 60 {
+            let clock = arrival.expectedDepartureDate.formatted(date: .omitted, time: .shortened)
+            return "\(head), departing at \(clock)"
+        }
+        return minutes == 0
+            ? "\(head), departing now"
+            : "\(head), departing in \(minutes) minute\(minutes == 1 ? "" : "s")"
     }
 }
