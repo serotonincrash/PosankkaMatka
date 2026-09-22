@@ -39,6 +39,7 @@ struct SheetHost: View {
     /// Detent-reframe callback, fired from here so per-drag detent reads stay
     /// out of `HomeView.body` (which would re-diff the Map on every write).
     let onCardDetentChange: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -102,9 +103,13 @@ struct SheetHost: View {
         .interactiveDismissDisabled()
     }
 
-    /// The card content replacement: the new detail slides up over the old one.
+    /// The card content replacement: the new detail slides up over the old
+    /// one — a plain fade under Reduce Motion.
     private var cardTransition: AnyTransition {
-        .asymmetric(insertion: .move(edge: .bottom), removal: .opacity)
+        .asymmetric(
+            insertion: reduceMotion ? .opacity : .move(edge: .bottom),
+            removal: .opacity
+        )
     }
 
     /// Master shows exactly when no card is. No-op setter: the sheet can't be

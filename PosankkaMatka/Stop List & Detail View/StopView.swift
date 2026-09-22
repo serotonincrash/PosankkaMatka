@@ -12,6 +12,10 @@ struct StopView: View {
     @FoliService var foli
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Steers VoiceOver to the arrivals header once it exists (the card
+    /// presents with a spinner, so there's nothing earlier to focus).
+    @AccessibilityFocusState private var focusArrivals: Bool
 
     var body: some View {
         Group {
@@ -56,6 +60,8 @@ struct StopView: View {
                             } header: {
                                 HStack {
                                     Text("Arrivals")
+                                        .accessibilityAddTraits(.isHeader)
+                                        .accessibilityFocused($focusArrivals)
                                     Spacer()
                                     // "Updating…" mid-fetch, else wall-clock time —
                                     // relative wording would read "now" most of
@@ -78,7 +84,7 @@ struct StopView: View {
                         }
                         // Animate poll diffs (rows sliding/reordering), beyond
                         // the load-state animation below.
-                        .animation(.spring(.bouncy), value: arrivals)
+                        .animation(reduceMotion ? nil : .spring(.bouncy), value: arrivals)
                     }
 
                 }
@@ -88,7 +94,7 @@ struct StopView: View {
         // .smooth, not .bouncy: an overshooting spring pushes the fresh list
         // past its resting spot for a frame, which the List reads as scrolled
         // — the nav bar hairline flashes in under the title.
-        .animation(.smooth, value: arrivalsStore.state)
+        .animation(reduceMotion ? nil : .smooth, value: arrivalsStore.state)
         .refreshable {
             await arrivalsStore.refresh(fetch)
         }
@@ -104,6 +110,11 @@ struct StopView: View {
         }
         .navigationTitle(Text(stopWithDistance.stop.name))
         .navigationBarTitleDisplayMode(.inline)
+        // First arrival only: focus the header when the list materializes;
+        // poll refreshes (success → success) must never yank focus back.
+        .onChange(of: arrivalsStore.state) { old, _ in
+            if case .loading = old { focusArrivals = true }
+        }
 
     }
 

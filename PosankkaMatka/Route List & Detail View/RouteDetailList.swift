@@ -15,6 +15,8 @@ struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
     @Environment(RouteDetailStore.self) private var routeDetail
+    /// Steers VoiceOver past the sheet's grabber on appear.
+    @AccessibilityFocusState private var focusSubtitle: Bool
 
     var body: some View {
         @Bindable var routeDetail = routeDetail
@@ -30,6 +32,8 @@ struct RouteDetailList: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, routeDetail.allDirections.count > 1 ? 4 : 8)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusSubtitle)
             }
             // Pinned above the list so it stays visible while the stops scroll.
             if routeDetail.allDirections.count > 1 {
@@ -49,6 +53,7 @@ struct RouteDetailList: View {
         // display mode across content swaps.
         .navigationTitle("Route \(route.shortName)")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { focusSubtitle = true }
     }
 
     @ViewBuilder

@@ -50,6 +50,7 @@ struct HomeView: View {
     /// Stop IDs served by a boat route — rendered with a ferry glyph.
     @State private var boatStopIDs: Set<Foli.Stop.ID> = []
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // Map + sheets as ZStack SIBLINGS: the sheets (and their detent state)
@@ -75,6 +76,10 @@ struct HomeView: View {
                     lineRoutes: lineRoutes
                 )
                 .ignoresSafeArea(edges: .bottom)
+                // Out of the swipe chain: every map fact (stops, arrivals) is
+                // reachable through the sheets, and with background
+                // interaction on, map elements would trail the list's end.
+                .accessibilityHidden(true)
                 .onMapCameraChange(frequency: .onEnd) { context in
                     visibleRegion = context.region
                     liveCamera = context.camera
@@ -116,6 +121,8 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
+            // Manipulate the (a11y-hidden) map only — keep out of the chain.
+            .accessibilityHidden(true)
 
             SheetHost(
                 selectedStopID: $selectedStopID,
@@ -227,7 +234,7 @@ struct HomeView: View {
                 latitude: anchor.latitude - nudge * height * upNorth,
                 longitude: anchor.longitude - nudge * height * upEast / scale
             )
-            withAnimation {
+            withAnimation(reduceMotion ? nil : .default) {
                 camera = .camera(MapCamera(
                     centerCoordinate: center,
                     distance: cam.distance,
@@ -272,7 +279,7 @@ struct HomeView: View {
         )
         let region = MKCoordinateRegion(center: center, span: span)
         visibleRegion = region
-        withAnimation(.easeInOut(duration: 0.4)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
             camera = .region(region)
         }
     }
@@ -300,7 +307,7 @@ struct HomeView: View {
             span: MKCoordinateSpan(latitudeDelta: latDelta, longitudeDelta: region.span.longitudeDelta)
         )
         visibleRegion = framed
-        withAnimation { camera = .region(framed) }
+        withAnimation(reduceMotion ? nil : .default) { camera = .region(framed) }
     }
 
     /// Fraction of map height visible above the card. `.large` frames like
@@ -370,7 +377,7 @@ struct HomeView: View {
                 )
                 let region = MKCoordinateRegion(center: center, span: Self.defaultSpan)
                 visibleRegion = region
-                withAnimation { camera = .region(region) }
+                withAnimation(reduceMotion ? nil : .default) { camera = .region(region) }
                 return
             }
             do {
