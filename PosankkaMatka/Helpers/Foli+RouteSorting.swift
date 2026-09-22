@@ -8,6 +8,13 @@
 import Foundation
 import FoliBusAPI
 
+extension Foli.Route {
+    /// Row label for screen readers ("Route 15, Kauppatori–Länsikeskus").
+    var spokenDescription: String {
+        "Route \(shortName), \(longName)"
+    }
+}
+
 extension Collection where Element == Foli.Route {
     /// Sorts by the leading integer of `shortName` (full string as tiebreaker);
     /// non-numeric names sort last, alphabetically.
