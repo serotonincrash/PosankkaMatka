@@ -402,12 +402,15 @@ struct HomeView: View {
 private struct MapLocateButton: View {
     let isAuthorized: Bool
     let action: () -> Void
+    /// Tracks Dynamic Type so the target grows alongside giant text instead of
+    /// pinning at the 44 pt floor.
+    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
 
     private var label: some View {
         Image(systemName: "location.fill")
             .font(.body.weight(.semibold))
             .foregroundStyle(isAuthorized ? Color.accentColor : Color.secondary)
-            .frame(width: 44, height: 44)
+            .frame(width: buttonSize, height: buttonSize)
     }
 
     var body: some View {

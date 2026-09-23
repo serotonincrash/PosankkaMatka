@@ -15,6 +15,10 @@ struct RouteBadge: View {
 
     /// Shared monospaced font, so the hidden reference and visible text measure identically.
     private var badgeFont: Font { .subheadline.weight(.bold).monospaced() }
+    /// Chrome tracks the badge text under Dynamic Type instead of pinning.
+    @ScaledMetric(relativeTo: .subheadline) private var hPadding: CGFloat = 8
+    @ScaledMetric(relativeTo: .subheadline) private var vPadding: CGFloat = 4
+    @ScaledMetric(relativeTo: .subheadline) private var cornerRadius: CGFloat = 6
 
     var body: some View {
         ZStack {
@@ -27,9 +31,9 @@ struct RouteBadge: View {
                 .font(badgeFont)
                 .foregroundStyle(route.textColor ?? .white)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(route.color ?? .accentColor, in: .rect(cornerRadius: 6))
+        .padding(.horizontal, hPadding)
+        .padding(.vertical, vPadding)
+        .background(route.color ?? .accentColor, in: .rect(cornerRadius: cornerRadius))
     }
 }
 
