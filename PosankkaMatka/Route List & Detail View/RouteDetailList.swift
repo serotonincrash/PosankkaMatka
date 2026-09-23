@@ -32,6 +32,9 @@ struct RouteDetailList: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, routeDetail.allDirections.count > 1 ? 4 : 8)
+                    // Focus lands here on appear — the corridor name alone
+                    // doesn't say which route this is.
+                    .accessibilityLabel(route.spokenDescription)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focusSubtitle)
             }
@@ -45,6 +48,9 @@ struct RouteDetailList: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+                // Segmented style drops the title string from VoiceOver —
+                // without this, segments read as bare "headsign, 1 of 2".
+                .accessibilityLabel("Direction")
                 .accessibilityHint("Switches which direction's stops are shown")
             }
 
@@ -87,7 +93,7 @@ struct RouteDetailList: View {
                             // Same phrasing as the master list's stop rows;
                             // Voice Control gets the short forms.
                             .accessibilityLabel(StopWithDistance(stop).spokenDescription)
-                            .accessibilityHint("Shows live arrivals for this stop")
+                            .accessibilityHint("Opens live arrivals for this stop")
                             .accessibilityInputLabels([
                                 "\(stop.id) \(stop.name)",
                                 stop.name

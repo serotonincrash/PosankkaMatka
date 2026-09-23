@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import FoliBusUI
 struct StopView: View {
     var stopWithDistance: StopWithDistance
@@ -57,11 +58,20 @@ struct StopView: View {
                                         }
                                     }
                                     .accessibilityElement(children: .combine)
-                                    .accessibilityLabel(spokenArrival(arrival))
+                                    .accessibilityLabel(
+                                        spokenArrival(
+                                            line: arrival.lineRef,
+                                            destination: arrival.destinationDisplay,
+                                            departure: arrival.expectedDepartureDate
+                                        ))
                                 }
                             } header: {
                                 HStack {
+                                    // Focus lands here when the card's
+                                    // content materializes — say which stop's
+                                    // arrivals these are, not just "Arrivals".
                                     Text("Arrivals")
+                                        .accessibilityLabel("Arrivals for \(stopWithDistance.stop.name)")
                                         .accessibilityAddTraits(.isHeader)
                                         .accessibilityFocused($focusArrivals)
                                     Spacer()
@@ -117,6 +127,15 @@ struct StopView: View {
         .onChange(of: arrivalsStore.state) { old, _ in
             if case .loading = old { focusArrivals = true }
         }
+        // The banner is visual only; tell VoiceOver a refresh failed. Gated on
+        // a visible list — the full-screen failure view is self-announcing as
+        // new content.
+        .onChange(of: arrivalsStore.lastError?.localizedDescription) { old, new in
+            if old == nil, let new, arrivalsStore.state.value != nil {
+                UIAccessibility.post(notification: .announcement,
+                                     argument: "Refresh failed: \(new)")
+            }
+        }
 
     }
 
@@ -132,25 +151,21 @@ struct StopView: View {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
     }
+}
 
-    /// Row label for screen readers, with spoken time phrasing ("Line 32 to
-    /// Kauppatori, departing in 5 minutes"). Buckets mirror
-    /// `formattedInterval` but in words — "5 min" reads poorly aloud.
-    private func spokenArrival(_ arrival: Foli.Arrival) -> String {
-        let line = route(for: arrival)?.shortName ?? arrival.lineRef
-        let interval = arrival.expectedDepartureDate.timeIntervalSince(.now)
-        let minutes = Int((interval / 60).rounded())
-        let head = "Line \(line) to \(arrival.destinationDisplay)"
-        if interval <= 0 {
-            let ago = abs(minutes)
-            return "\(head), departed \(ago) minute\(ago == 1 ? "" : "s") ago"
-        }
-        if minutes >= 60 {
-            let clock = arrival.expectedDepartureDate.formatted(date: .omitted, time: .shortened)
-            return "\(head), departing at \(clock)"
-        }
-        return minutes == 0
-            ? "\(head), departing now"
-            : "\(head), departing in \(minutes) minute\(minutes == 1 ? "" : "s")"
+/// Row label for screen readers ("Line 32 to Kauppatori, departing in 5
+/// minutes"). The relative form words the minute buckets (and their plurals,
+/// in the device locale) natively; an hour or more out reads better as clock
+/// time, and under a minute as "departing now".
+func spokenArrival(line: String, destination: String, departure: Date) -> String {
+    let head = "Line \(line) to \(destination)"
+    let interval = departure.timeIntervalSince(.now)
+    let minutes = Int((interval / 60).rounded())
+    if minutes >= 60 {
+        return "\(head), departing at \(departure.formatted(date: .omitted, time: .shortened))"
     }
+    if interval > 0, minutes == 0 {
+        return "\(head), departing now"
+    }
+    return "\(head), \(departure.formatted(.relative(presentation: .named)))"
 }

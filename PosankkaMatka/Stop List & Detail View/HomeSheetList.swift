@@ -30,6 +30,9 @@ struct HomeSheetList: View {
     /// Idle "Nearby Stops" rows shown before the "Show all stops" disclosure.
     private static let nearbyLimit = 25
     @State private var showsAllNearbyStops = false
+    /// Steers VoiceOver to the first header when the master sheet (re)presents
+    /// — after a card closes, focus would otherwise land on the grabber.
+    @AccessibilityFocusState private var focusStopsHeader: Bool
 
     var body: some View {
         Group {
@@ -52,7 +55,7 @@ struct HomeSheetList: View {
                                     // VoiceOver reads the full phrase; Voice
                                     // Control can target the short forms.
                                     .accessibilityLabel(stopWithDistance.spokenDescription)
-                                    .accessibilityHint("Shows live arrivals for this stop")
+                                    .accessibilityHint("Opens live arrivals for this stop")
                                     .accessibilityInputLabels([
                                         "\(stopWithDistance.stop.id) \(stopWithDistance.stop.name)",
                                         stopWithDistance.stop.name
@@ -69,6 +72,7 @@ struct HomeSheetList: View {
                             // between sections instead of swiping every row.
                             Text(stopSectionTitle)
                                 .accessibilityAddTraits(.isHeader)
+                                .accessibilityFocused($focusStopsHeader)
                         }
                     }
                     if !routeRows.isEmpty {
@@ -95,6 +99,7 @@ struct HomeSheetList: View {
                         }
                     }
                 }
+                .onAppear { focusStopsHeader = true }
             }
         }
         .navigationTitle(Text("Föli"))
