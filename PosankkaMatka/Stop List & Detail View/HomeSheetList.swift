@@ -30,6 +30,7 @@ struct HomeSheetList: View {
     /// Idle "Nearby Stops" rows shown before the "Show all stops" disclosure.
     private static let nearbyLimit = 25
     @State private var showsAllNearbyStops = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Steers VoiceOver to the first header when the master sheet (re)presents
     /// — after a card closes, focus would otherwise land on the grabber.
     @AccessibilityFocusState private var focusStopsHeader: Bool
@@ -203,10 +204,10 @@ struct HomeSheetList: View {
     @ViewBuilder
     private var stopsDisclosure: some View {
         if !isLocationAuthorized {
-            HStack {
+            adaptiveRow {
                 Text("Turn on location to see nearby stops")
                     .foregroundStyle(.secondary)
-                Spacer()
+            } action: {
                 Button("Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
@@ -215,10 +216,10 @@ struct HomeSheetList: View {
                 .accessibilityHint("Opens this app's system settings")
             }
         } else if case .proximity(let meters) = searchFilter {
-            HStack {
+            adaptiveRow {
                 Text("No stops within \(meters.formattedDistance)")
                     .foregroundStyle(.secondary)
-                Spacer()
+            } action: {
                 Button("Show all") { searchFilter = .none }
                     .accessibilityHint("Clears the distance filter")
             }
@@ -228,37 +229,89 @@ struct HomeSheetList: View {
         }
     }
 
+    /// A message with a trailing action button; stacks vertically at
+    /// accessibility sizes (like the rows), so the message keeps full width.
+    @ViewBuilder
+    private func adaptiveRow<Message: View, Action: View>(
+        @ViewBuilder _ message: () -> Message,
+        @ViewBuilder action: () -> Action
+    ) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                message()
+                action()
+            }
+        } else {
+            HStack {
+                message()
+                Spacer()
+                action()
+            }
+        }
+    }
+
     // MARK: - Rows
 
     private struct StopRow: View {
         let stopWithDistance: StopWithDistance
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
         var body: some View {
-            HStack {
-                Image(systemName: "signpost.right.fill")
-                    .foregroundStyle(.secondary)
-                    .imageScale(.small)
-                    .accessibilityHidden(true)
-                Text(stopWithDistance.stop.id).monospaced()
-                Text(stopWithDistance.stop.name)
-                Spacer()
-                if let distanceText = stopWithDistance.distanceText {
-                    Text(distanceText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+            // Accessibility sizes stack the row vertically — side by side, the
+            // columns starve each other's width and names break mid-word.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        icon
+                        Text(stopWithDistance.stop.id).monospaced()
+                    }
+                    Text(stopWithDistance.stop.name)
+                    distance
                 }
+            } else {
+                HStack {
+                    icon
+                    Text(stopWithDistance.stop.id).monospaced()
+                    Text(stopWithDistance.stop.name)
+                    Spacer()
+                    distance
+                }
+            }
+        }
+
+        private var icon: some View {
+            Image(systemName: "signpost.right.fill")
+                .foregroundStyle(.secondary)
+                .imageScale(.small)
+                .accessibilityHidden(true)
+        }
+
+        @ViewBuilder
+        private var distance: some View {
+            if let distanceText = stopWithDistance.distanceText {
+                Text(distanceText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     private struct RouteRow: View {
         let route: Foli.Route
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
         var body: some View {
-            HStack(spacing: 12) {
-                RouteBadge(route: route)
-                Text(route.longName)
-                Spacer()
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    RouteBadge(route: route)
+                    Text(route.longName)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    RouteBadge(route: route)
+                    Text(route.longName)
+                    Spacer()
+                }
             }
         }
     }

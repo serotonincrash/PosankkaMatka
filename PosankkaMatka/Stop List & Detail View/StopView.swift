@@ -14,6 +14,7 @@ struct StopView: View {
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Steers VoiceOver to the arrivals header once it exists (the card
     /// presents with a spinner, so there's nothing earlier to focus).
     @AccessibilityFocusState private var focusArrivals: Bool
@@ -40,21 +41,23 @@ struct StopView: View {
                         List {
                             Section {
                                 ForEach(arrivals) { arrival in
-                                    HStack(spacing: 12) {
-                                        if let route = route(for: arrival) {
-                                            RouteBadge(route: route)
+                                    // Accessibility sizes stack the row —
+                                    // side by side, the countdown column
+                                    // squeezes the destination text.
+                                    Group {
+                                        if dynamicTypeSize.isAccessibilitySize {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                lineBadge(for: arrival)
+                                                Text(arrival.destinationDisplay)
+                                                countdown(for: arrival)
+                                            }
                                         } else {
-                                            Text(arrival.lineRef)
-                                                .monospaced()
-                                        }
-                                        Text(arrival.destinationDisplay)
-                                        Spacer()
-                                        // Ticks between polls so "N min" counts
-                                        // down instead of freezing.
-                                        TimelineView(.periodic(from: .now, by: 15)) { _ in
-                                            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
-                                                .font(.footnote)
-                                                .monospacedDigit()
+                                            HStack(spacing: 12) {
+                                                lineBadge(for: arrival)
+                                                Text(arrival.destinationDisplay)
+                                                Spacer()
+                                                countdown(for: arrival)
+                                            }
                                         }
                                     }
                                     .accessibilityElement(children: .combine)
@@ -66,28 +69,19 @@ struct StopView: View {
                                         ))
                                 }
                             } header: {
-                                HStack {
-                                    // Focus lands here when the card's
-                                    // content materializes — say which stop's
-                                    // arrivals these are, not just "Arrivals".
-                                    Text("Arrivals")
-                                        .accessibilityLabel("Arrivals for \(stopWithDistance.stop.name)")
-                                        .accessibilityAddTraits(.isHeader)
-                                        .accessibilityFocused($focusArrivals)
-                                    Spacer()
-                                    // "Updating…" mid-fetch, else wall-clock time —
-                                    // relative wording would read "now" most of
-                                    // the 20 s cycle.
-                                    if arrivalsStore.isRefreshing {
-                                        Text("Updating…")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .textCase(nil)
-                                    } else if let updated = arrivalsStore.lastUpdated {
-                                        Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .textCase(nil)
+                                // The status caption stacks under the title
+                                // at accessibility sizes instead of folding
+                                // into a trailing sliver.
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        arrivalsTitle
+                                        refreshStatus
+                                    }
+                                } else {
+                                    HStack {
+                                        arrivalsTitle
+                                        Spacer()
+                                        refreshStatus
                                     }
                                 }
                             } footer: {
@@ -150,6 +144,52 @@ struct StopView: View {
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
         guard let routes = routesStore.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
+    }
+
+    /// Badge or plain line text for an arrival row.
+    @ViewBuilder
+    private func lineBadge(for arrival: Foli.Arrival) -> some View {
+        if let route = route(for: arrival) {
+            RouteBadge(route: route)
+        } else {
+            Text(arrival.lineRef).monospaced()
+        }
+    }
+
+    /// Ticks between polls so "N min" counts down instead of freezing.
+    private func countdown(for arrival: Foli.Arrival) -> some View {
+        TimelineView(.periodic(from: .now, by: 15)) { _ in
+            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
+                .font(.footnote)
+                .monospacedDigit()
+        }
+    }
+
+    /// Focus lands here when the card's content materializes — say which
+    /// stop's arrivals these are, not just "Arrivals".
+    private var arrivalsTitle: some View {
+        Text("Arrivals")
+            .accessibilityLabel("Arrivals for \(stopWithDistance.stop.name)")
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($focusArrivals)
+    }
+
+    /// "Updating…" mid-fetch, else wall-clock time — relative wording would
+    /// read "now" most of the 20 s cycle.
+    @ViewBuilder
+    private var refreshStatus: some View {
+        if arrivalsStore.isRefreshing {
+            statusText("Updating…")
+        } else if let updated = arrivalsStore.lastUpdated {
+            statusText("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+        }
+    }
+
+    private func statusText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .textCase(nil)
     }
 }
 
