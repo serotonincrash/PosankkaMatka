@@ -15,6 +15,7 @@ struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
     @Environment(RouteDetailStore.self) private var routeDetail
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Steers VoiceOver past the sheet's grabber on appear.
     @AccessibilityFocusState private var focusSubtitle: Bool
 
@@ -40,18 +41,9 @@ struct RouteDetailList: View {
             }
             // Pinned above the list so it stays visible while the stops scroll.
             if routeDetail.allDirections.count > 1 {
-                Picker("Direction", selection: $routeDetail.selectedDirectionId) {
-                    ForEach(routeDetail.allDirections) { direction in
-                        Text(direction.headsign).tag(Optional(direction.id))
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                // Segmented style drops the title string from VoiceOver —
-                // without this, segments read as bare "headsign, 1 of 2".
-                .accessibilityLabel("Direction")
-                .accessibilityHint("Switches which direction's stops are shown")
+                directionPicker
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
             }
 
             content
@@ -61,6 +53,32 @@ struct RouteDetailList: View {
         .navigationTitle("Route \(route.shortName)")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { focusSubtitle = true }
+    }
+
+    /// The direction selector. Segments normally; a menu picker at
+    /// accessibility sizes — segments clip long headsigns, and HIG picks
+    /// menus where space is tight.
+    @ViewBuilder
+    private var directionPicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            directionPickerBody(.menu)
+        } else {
+            directionPickerBody(.segmented)
+        }
+    }
+
+    /// Segmented style drops the Picker's title string from VoiceOver — the
+    /// explicit label keeps "Direction" in the announcement.
+    private func directionPickerBody(_ style: some PickerStyle) -> some View {
+        @Bindable var routeDetail = routeDetail
+        return Picker("Direction", selection: $routeDetail.selectedDirectionId) {
+            ForEach(routeDetail.allDirections) { direction in
+                Text(direction.headsign).tag(Optional(direction.id))
+            }
+        }
+        .pickerStyle(style)
+        .accessibilityLabel("Direction")
+        .accessibilityHint("Switches which direction's stops are shown")
     }
 
     @ViewBuilder
@@ -83,10 +101,19 @@ struct RouteDetailList: View {
                             Button {
                                 selectedStopID = stop.id
                             } label: {
-                                HStack {
-                                    Text(stop.id).monospaced()
-                                    Text(stop.name)
-                                    Spacer()
+                                // Accessibility sizes stack the row (same
+                                // reasoning as the master list's stop rows).
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(stop.id).monospaced()
+                                        Text(stop.name)
+                                    }
+                                } else {
+                                    HStack {
+                                        Text(stop.id).monospaced()
+                                        Text(stop.name)
+                                        Spacer()
+                                    }
                                 }
                             }
                             .tint(.primary)
