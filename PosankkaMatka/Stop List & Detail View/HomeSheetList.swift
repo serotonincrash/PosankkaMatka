@@ -263,7 +263,7 @@ struct HomeSheetList: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         icon
-                        Text(stopWithDistance.stop.id).monospaced()
+                        code
                     }
                     Text(stopWithDistance.stop.name)
                     distance
@@ -271,12 +271,20 @@ struct HomeSheetList: View {
             } else {
                 HStack {
                     icon
-                    Text(stopWithDistance.stop.id).monospaced()
+                    code
                     Text(stopWithDistance.stop.name)
                     Spacer()
                     distance
                 }
             }
+        }
+
+        /// The stop's short code — metadata, not a second title.
+        private var code: some View {
+            Text(stopWithDistance.stop.id)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospaced()
         }
 
         private var icon: some View {

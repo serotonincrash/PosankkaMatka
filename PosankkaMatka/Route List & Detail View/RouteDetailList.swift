@@ -81,6 +81,14 @@ struct RouteDetailList: View {
         .accessibilityHint("Switches which direction's stops are shown")
     }
 
+    /// The stop's short code — metadata, not a second title.
+    private func stopCode(_ id: String) -> some View {
+        Text(id)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .monospaced()
+    }
+
     @ViewBuilder
     private var content: some View {
         switch routeDetail.directions.state {
@@ -105,12 +113,12 @@ struct RouteDetailList: View {
                                 // reasoning as the master list's stop rows).
                                 if dynamicTypeSize.isAccessibilitySize {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(stop.id).monospaced()
+                                        stopCode(stop.id)
                                         Text(stop.name)
                                     }
                                 } else {
                                     HStack {
-                                        Text(stop.id).monospaced()
+                                        stopCode(stop.id)
                                         Text(stop.name)
                                         Spacer()
                                     }
