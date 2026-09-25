@@ -185,7 +185,9 @@ struct StopView: View {
         }
     }
 
-    private func statusText(_ text: String) -> some View {
+    /// LocalizedStringKey (not String) so `Text` looks the keys up instead
+    /// of rendering them verbatim.
+    private func statusText(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.caption2)
             .foregroundStyle(.secondary)

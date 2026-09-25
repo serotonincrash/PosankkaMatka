@@ -183,7 +183,9 @@ struct HomeSheetList: View {
     /// Search shows the stops section only with matches; idle always shows it.
     private var showsStopsSection: Bool { isSearching ? !stopRows.isEmpty : true }
 
-    private var stopSectionTitle: String { isSearching ? "Stops" : "Nearby Stops" }
+    /// LocalizedStringKey (not String) so `Text` looks the keys up instead
+    /// of rendering them verbatim.
+    private var stopSectionTitle: LocalizedStringKey { isSearching ? "Stops" : "Nearby Stops" }
 
     /// The proximity filter is meaningful only in the idle list with a location.
     private var showsFilterMenu: Bool { isLocationAuthorized && !isSearching }
@@ -213,7 +215,7 @@ struct HomeSheetList: View {
                         UIApplication.shared.open(url)
                     }
                 }
-                .accessibilityHint("Opens this app's system settings")
+                .accessibilityHint("Opens system settings for the purpose of granting location permissions")
             }
         } else if case .proximity(let meters) = searchFilter {
             adaptiveRow {
