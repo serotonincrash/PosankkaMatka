@@ -15,6 +15,7 @@ struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
     @Environment(RouteDetailStore.self) private var routeDetail
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Steers VoiceOver past the sheet's grabber on appear.
     @AccessibilityFocusState private var focusSubtitle: Bool
 
@@ -32,20 +33,17 @@ struct RouteDetailList: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, routeDetail.allDirections.count > 1 ? 4 : 8)
+                    // Focus lands here on appear — the corridor name alone
+                    // doesn't say which route this is.
+                    .accessibilityLabel(route.spokenDescription)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focusSubtitle)
             }
             // Pinned above the list so it stays visible while the stops scroll.
             if routeDetail.allDirections.count > 1 {
-                Picker("Direction", selection: $routeDetail.selectedDirectionId) {
-                    ForEach(routeDetail.allDirections) { direction in
-                        Text(direction.headsign).tag(Optional(direction.id))
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                .accessibilityHint("Switches which direction's stops are shown")
+                directionPicker
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
             }
 
             content
@@ -55,6 +53,40 @@ struct RouteDetailList: View {
         .navigationTitle("Route \(route.shortName)")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { focusSubtitle = true }
+    }
+
+    /// The direction selector. Segments normally; a menu picker at
+    /// accessibility sizes — segments clip long headsigns, and HIG picks
+    /// menus where space is tight.
+    @ViewBuilder
+    private var directionPicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            directionPickerBody(.menu)
+        } else {
+            directionPickerBody(.segmented)
+        }
+    }
+
+    /// Segmented style drops the Picker's title string from VoiceOver — the
+    /// explicit label keeps "Direction" in the announcement.
+    private func directionPickerBody(_ style: some PickerStyle) -> some View {
+        @Bindable var routeDetail = routeDetail
+        return Picker("Direction", selection: $routeDetail.selectedDirectionId) {
+            ForEach(routeDetail.allDirections) { direction in
+                Text(direction.headsign).tag(Optional(direction.id))
+            }
+        }
+        .pickerStyle(style)
+        .accessibilityLabel("Direction")
+        .accessibilityHint("Switches which direction's stops are shown")
+    }
+
+    /// The stop's short code — metadata, not a second title.
+    private func stopCode(_ id: String) -> some View {
+        Text(id)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .monospaced()
     }
 
     @ViewBuilder
@@ -77,17 +109,26 @@ struct RouteDetailList: View {
                             Button {
                                 selectedStopID = stop.id
                             } label: {
-                                HStack {
-                                    Text(stop.id).monospaced()
-                                    Text(stop.name)
-                                    Spacer()
+                                // Accessibility sizes stack the row (same
+                                // reasoning as the master list's stop rows).
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        stopCode(stop.id)
+                                        Text(stop.name)
+                                    }
+                                } else {
+                                    HStack {
+                                        stopCode(stop.id)
+                                        Text(stop.name)
+                                        Spacer()
+                                    }
                                 }
                             }
                             .tint(.primary)
                             // Same phrasing as the master list's stop rows;
                             // Voice Control gets the short forms.
                             .accessibilityLabel(StopWithDistance(stop).spokenDescription)
-                            .accessibilityHint("Shows live arrivals for this stop")
+                            .accessibilityHint("Opens live arrivals for this stop")
                             .accessibilityInputLabels([
                                 "\(stop.id) \(stop.name)",
                                 stop.name

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB3393007B6F200F86DBB /* FoliBusAPI */; };
 		D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB33B3007B6F200F86DBB /* FoliBusUI */; };
+		D1785CF330617DB300E87E45 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D1785CF230617DB300E87E45 /* Localizable.xcstrings */; };
 		D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1A8200B302DDA0800BFEC15 /* Forever */; };
 		D1FA4CCC302091830052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCB302091830052526B /* Forever */; };
 		D1FA4CCF302091ED0052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCE302091ED0052526B /* Forever */; };
@@ -35,6 +36,7 @@
 		D158E60C2F833CA400DF70CE /* PosankkaMatka.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PosankkaMatka.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D158E6192F833CA600DF70CE /* PosankkaMatkaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PosankkaMatkaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D158E6232F833CA600DF70CE /* PosankkaMatkaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PosankkaMatkaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1785CF230617DB300E87E45 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -88,6 +90,7 @@
 		D158E6032F833CA400DF70CE = {
 			isa = PBXGroup;
 			children = (
+				D1785CF230617DB300E87E45 /* Localizable.xcstrings */,
 				D158E60E2F833CA400DF70CE /* PosankkaMatka */,
 				D158E61C2F833CA600DF70CE /* PosankkaMatkaTests */,
 				D158E6262F833CA600DF70CE /* PosankkaMatkaUITests */,
@@ -210,6 +213,7 @@
 			knownRegions = (
 				en,
 				Base,
+				fi,
 			);
 			mainGroup = D158E6032F833CA400DF70CE;
 			minimizedProjectReferenceProxies = 1;
@@ -234,6 +238,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1785CF330617DB300E87E45 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,6 +357,7 @@
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -410,6 +416,7 @@
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -420,7 +427,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = PossankaMatkaIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = XL5JK4F896;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -455,7 +462,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = PossankaMatkaIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = XL5JK4F896;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

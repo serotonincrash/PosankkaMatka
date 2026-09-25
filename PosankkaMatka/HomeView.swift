@@ -177,8 +177,15 @@ struct HomeView: View {
         guard let newValue,
               let found = allStops.first(where: { $0.id == newValue }),
               let coordinate = found.location?.toCLCoordinate() else { return }
-        // A fresh card opens at the default detent; swaps keep the user's.
-        if stop == nil && selectedRoute == nil { sheetModel.cardDetent = .medium }
+        // Every stop-card change re-opens at .medium — a tall or peek detent
+        // carried over from the previous content buries the reframed map.
+        // The reset must not ALSO fire the detent reframe: that handler runs
+        // on stale camera state mid-swap and would clobber the framing issued
+        // just below, so programmatic changes are flagged for the handler.
+        if sheetModel.cardDetent != .medium {
+            sheetModel.suppressDetentReframe = true
+            sheetModel.cardDetent = .medium
+        }
         // Recenter BEFORE presenting the card: the concurrent sheet transition
         // can make MapKit skip the camera animation and drop the zoom.
         frameSelectedStop(at: coordinate)
@@ -402,12 +409,15 @@ struct HomeView: View {
 private struct MapLocateButton: View {
     let isAuthorized: Bool
     let action: () -> Void
+    /// Tracks Dynamic Type so the target grows alongside giant text instead of
+    /// pinning at the 44 pt floor.
+    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
 
     private var label: some View {
         Image(systemName: "location.fill")
             .font(.body.weight(.semibold))
             .foregroundStyle(isAuthorized ? Color.accentColor : Color.secondary)
-            .frame(width: 44, height: 44)
+            .frame(width: buttonSize, height: buttonSize)
     }
 
     var body: some View {

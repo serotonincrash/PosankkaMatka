@@ -21,6 +21,10 @@ final class SheetModel {
     var listDetent: PresentationDetent = .medium
     /// Detent of the detail card (stop or route content).
     var cardDetent: PresentationDetent = .medium
+    /// Set while a programmatic cardDetent change should NOT trigger the
+    /// detent reframe — the writer (stop selection) frames synchronously
+    /// itself. Consumed by SheetHost's change handler.
+    var suppressDetentReframe = false
 }
 
 /// Hosts the app's two sheets as siblings (never nested), isolated from the
@@ -73,7 +77,13 @@ struct SheetHost: View {
                     }
                 }
                 .onChange(of: sheetModel.cardDetent) { _, _ in
-                    onCardDetentChange()
+                    // Programmatic resets (card swaps) frame synchronously at
+                    // the selection site; only user drags reframe.
+                    if sheetModel.suppressDetentReframe {
+                        sheetModel.suppressDetentReframe = false
+                    } else {
+                        onCardDetentChange()
+                    }
                 }
         }
     }

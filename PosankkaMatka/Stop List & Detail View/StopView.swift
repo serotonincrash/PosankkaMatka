@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import FoliBusUI
 struct StopView: View {
     var stopWithDistance: StopWithDistance
@@ -13,6 +14,7 @@ struct StopView: View {
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Steers VoiceOver to the arrivals header once it exists (the card
     /// presents with a spinner, so there's nothing earlier to focus).
     @AccessibilityFocusState private var focusArrivals: Bool
@@ -39,45 +41,47 @@ struct StopView: View {
                         List {
                             Section {
                                 ForEach(arrivals) { arrival in
-                                    HStack(spacing: 12) {
-                                        if let route = route(for: arrival) {
-                                            RouteBadge(route: route)
+                                    // Accessibility sizes stack the row —
+                                    // side by side, the countdown column
+                                    // squeezes the destination text.
+                                    Group {
+                                        if dynamicTypeSize.isAccessibilitySize {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                lineBadge(for: arrival)
+                                                Text(arrival.destinationDisplay)
+                                                countdown(for: arrival)
+                                            }
                                         } else {
-                                            Text(arrival.lineRef)
-                                                .monospaced()
-                                        }
-                                        Text(arrival.destinationDisplay)
-                                        Spacer()
-                                        // Ticks between polls so "N min" counts
-                                        // down instead of freezing.
-                                        TimelineView(.periodic(from: .now, by: 15)) { _ in
-                                            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
-                                                .font(.footnote)
-                                                .monospacedDigit()
+                                            HStack(spacing: 12) {
+                                                lineBadge(for: arrival)
+                                                Text(arrival.destinationDisplay)
+                                                Spacer()
+                                                countdown(for: arrival)
+                                            }
                                         }
                                     }
                                     .accessibilityElement(children: .combine)
-                                    .accessibilityLabel(spokenArrival(arrival))
+                                    .accessibilityLabel(
+                                        spokenArrival(
+                                            line: arrival.lineRef,
+                                            destination: arrival.destinationDisplay,
+                                            departure: arrival.expectedDepartureDate
+                                        ))
                                 }
                             } header: {
-                                HStack {
-                                    Text("Arrivals")
-                                        .accessibilityAddTraits(.isHeader)
-                                        .accessibilityFocused($focusArrivals)
-                                    Spacer()
-                                    // "Updating…" mid-fetch, else wall-clock time —
-                                    // relative wording would read "now" most of
-                                    // the 20 s cycle.
-                                    if arrivalsStore.isRefreshing {
-                                        Text("Updating…")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .textCase(nil)
-                                    } else if let updated = arrivalsStore.lastUpdated {
-                                        Text("Updated \(updated.formatted(date: .omitted, time: .shortened))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .textCase(nil)
+                                // The status caption stacks under the title
+                                // at accessibility sizes instead of folding
+                                // into a trailing sliver.
+                                if dynamicTypeSize.isAccessibilitySize {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        arrivalsTitle
+                                        refreshStatus
+                                    }
+                                } else {
+                                    HStack {
+                                        arrivalsTitle
+                                        Spacer()
+                                        refreshStatus
                                     }
                                 }
                             } footer: {
@@ -117,6 +121,15 @@ struct StopView: View {
         .onChange(of: arrivalsStore.state) { old, _ in
             if case .loading = old { focusArrivals = true }
         }
+        // The banner is visual only; tell VoiceOver a refresh failed. Gated on
+        // a visible list — the full-screen failure view is self-announcing as
+        // new content.
+        .onChange(of: arrivalsStore.lastError?.localizedDescription) { old, new in
+            if old == nil, let new, arrivalsStore.state.value != nil {
+                UIAccessibility.post(notification: .announcement,
+                                     argument: "Refresh failed: \(new)")
+            }
+        }
 
     }
 
@@ -133,24 +146,68 @@ struct StopView: View {
         return routes.first { $0.shortName == arrival.lineRef }
     }
 
-    /// Row label for screen readers, with spoken time phrasing ("Line 32 to
-    /// Kauppatori, departing in 5 minutes"). Buckets mirror
-    /// `formattedInterval` but in words — "5 min" reads poorly aloud.
-    private func spokenArrival(_ arrival: Foli.Arrival) -> String {
-        let line = route(for: arrival)?.shortName ?? arrival.lineRef
-        let interval = arrival.expectedDepartureDate.timeIntervalSince(.now)
-        let minutes = Int((interval / 60).rounded())
-        let head = "Line \(line) to \(arrival.destinationDisplay)"
-        if interval <= 0 {
-            let ago = abs(minutes)
-            return "\(head), departed \(ago) minute\(ago == 1 ? "" : "s") ago"
+    /// Badge or plain line text for an arrival row.
+    @ViewBuilder
+    private func lineBadge(for arrival: Foli.Arrival) -> some View {
+        if let route = route(for: arrival) {
+            RouteBadge(route: route)
+        } else {
+            Text(arrival.lineRef).monospaced()
         }
-        if minutes >= 60 {
-            let clock = arrival.expectedDepartureDate.formatted(date: .omitted, time: .shortened)
-            return "\(head), departing at \(clock)"
-        }
-        return minutes == 0
-            ? "\(head), departing now"
-            : "\(head), departing in \(minutes) minute\(minutes == 1 ? "" : "s")"
     }
+
+    /// Ticks between polls so "N min" counts down instead of freezing.
+    private func countdown(for arrival: Foli.Arrival) -> some View {
+        TimelineView(.periodic(from: .now, by: 15)) { _ in
+            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
+                .font(.footnote)
+                .monospacedDigit()
+        }
+    }
+
+    /// Focus lands here when the card's content materializes — say which
+    /// stop's arrivals these are, not just "Arrivals".
+    private var arrivalsTitle: some View {
+        Text("Arrivals")
+            .accessibilityLabel("Arrivals for \(stopWithDistance.stop.name)")
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($focusArrivals)
+    }
+
+    /// "Updating…" mid-fetch, else wall-clock time — relative wording would
+    /// read "now" most of the 20 s cycle.
+    @ViewBuilder
+    private var refreshStatus: some View {
+        if arrivalsStore.isRefreshing {
+            statusText("Updating…")
+        } else if let updated = arrivalsStore.lastUpdated {
+            statusText("Updated \(updated.formatted(date: .omitted, time: .shortened))")
+        }
+    }
+
+    /// LocalizedStringKey (not String) so `Text` looks the keys up instead
+    /// of rendering them verbatim.
+    private func statusText(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+    }
+}
+
+/// Row label for screen readers ("Line 32 to Kauppatori, departing in 5
+/// minutes"). The relative form words the minute buckets (and their plurals,
+/// in the device locale) natively; an hour or more out reads better as clock
+/// time, and under a minute as "departing now".
+func spokenArrival(line: String, destination: String, departure: Date) -> String {
+    let head = "Line \(line) to \(destination)"
+    let interval = departure.timeIntervalSince(.now)
+    let minutes = Int((interval / 60).rounded())
+    if minutes >= 60 {
+        return "\(head), departing at \(departure.formatted(date: .omitted, time: .shortened))"
+    }
+    if interval > 0, minutes == 0 {
+        return "\(head), departing now"
+    }
+    return "\(head), \(departure.formatted(.relative(presentation: .named)))"
 }
