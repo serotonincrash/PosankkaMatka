@@ -10,8 +10,7 @@ import Observation
 import FoliBusUI
 
 /// Observable owner of one async-loaded resource: state, error mapping, and
-/// timestamps. The fetch is passed per call because `@FoliService` resolves
-/// only once installed.
+/// timestamps.
 @MainActor
 @Observable
 final class ResourceStore<T> {

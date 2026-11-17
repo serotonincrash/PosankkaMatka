@@ -52,18 +52,23 @@ final class VehicleStore {
     /// Suspends fetching (e.g. backgrounded) without dropping the scope.
     var isPaused = false
 
+    private let client: FoliClient
     private var scope: Scope?
     private var samples: [String: Sample] = [:]   // keyed by vehicleRef
     private var pollTask: Task<Void, Never>?
 
+    init(client: FoliClient) {
+        self.client = client
+    }
+
     /// Starts (or switches to) a scope; no-op when already monitoring it.
-    func start(_ scope: Scope, using foli: FoliService) {
+    func start(_ scope: Scope) {
         guard self.scope != scope else { return }
         self.scope = scope
         pollTask?.cancel()
         samples = [:]   // never show the old scope's vehicles mid-switch
         pollTask = Task {
-            await poll(scope, using: foli)
+            await poll(scope)
         }
     }
 
@@ -94,14 +99,14 @@ final class VehicleStore {
         }
     }
 
-    private func poll(_ scope: Scope, using foli: FoliService) async {
+    private func poll(_ scope: Scope) async {
         while !Task.isCancelled {
             if !isPaused {
                 do {
                     // VM is never disk-cached; every poll is fresh. Positionless
                     // vehicles are omitted by the package (2.3.0) and skipped
                     // here too — only displayable positions become samples.
-                    let fetched = try await foli.fetchVehicleLocations()
+                    let fetched = try await client.fetchVehicleLocations()
                         .filter { matches($0, scope: scope) }
                     let now = Date()
                     var next: [String: Sample] = [:]

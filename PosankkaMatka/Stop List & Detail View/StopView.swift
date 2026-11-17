@@ -10,8 +10,7 @@ import UIKit
 import FoliBusUI
 struct StopView: View {
     let stop: Foli.Stop
-    @FoliService var foli
-    @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
+    @Environment(AppModel.self) private var model
     @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -134,15 +133,15 @@ struct StopView: View {
     }
 
     private var fetch: @Sendable () async throws -> [Foli.Arrival] {
-        let foli = foli
+        let client = model.client
         let stopId = stop.id
-        return { try await foli.fetchArrivals(for: stopId) }
+        return { try await client.fetchArrivals(for: stopId) }
     }
 
     /// The route serving an arrival (`lineRef` == `route.shortName`); nil until
     /// routes load or when unmatched (falls back to plain line text).
     private func route(for arrival: Foli.Arrival) -> Foli.Route? {
-        guard let routes = routesStore.state.value else { return nil }
+        guard let routes = model.routes.state.value else { return nil }
         return routes.first { $0.shortName == arrival.lineRef }
     }
 

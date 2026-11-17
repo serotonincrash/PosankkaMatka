@@ -10,20 +10,16 @@ import FoliBusUI
 
 @main
 struct PosankkaMatkaApp: App {
+    @State private var model = AppModel(
+        client: DefaultFoliClientProvider(
+            configuration: FoliClientConfiguration(cacheBehavior: .cachedOrFetch, cacheTTL: .default)
+        ).client()
+    )
 
     var body: some Scene {
         WindowGroup {
             HomeView()
-                .environment(
-                    \.foliClientProvider,
-                     
-                    DefaultFoliClientProvider(
-                        configuration: FoliClientConfiguration(
-                            cacheBehavior: .cachedOrFetch,
-                            cacheTTL: .default
-                        )
-                    )
-                )
+                .environment(model)
         }
     }
 }

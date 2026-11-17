@@ -14,14 +14,13 @@ import FoliBusUI
 struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
-    @Environment(RouteDetailStore.self) private var routeDetail
+    @Environment(AppModel.self) private var model
+    private var routeDetail: RouteDetailStore { model.routeDetail }
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Steers VoiceOver past the sheet's grabber on appear.
     @AccessibilityFocusState private var focusSubtitle: Bool
 
     var body: some View {
-        @Bindable var routeDetail = routeDetail
-
         VStack(spacing: 0) {
             // The corridor name as a quiet subtitle — the full name truncates
             // as a large title.

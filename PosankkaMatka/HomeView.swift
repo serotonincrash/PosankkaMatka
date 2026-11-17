@@ -18,10 +18,7 @@ struct HomeView: View {
     /// Street-level span for a stop selected while zoomed out.
     private static let selectionSpan = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
 
-    @State private var locationManager = LocationManager()
-    @State private var stopsStore = ResourceStore<[Foli.Stop]>()
-    @State private var routesStore = ResourceStore<[Foli.Route]>()
-    @FoliService var foli
+    @Environment(AppModel.self) private var model
     /// Associates the map with the scoped compass in the controls overlay;
     /// connected by `.mapScope` on the containing ZStack.
     @Namespace private var mapScope
@@ -36,21 +33,9 @@ struct HomeView: View {
     @State private var displayedStops: [Foli.Stop] = []
     /// Region that produced `displayedStops`; skips no-op recomputes.
     @State private var lastMarkerRegion: MKCoordinateRegion?
-    /// The open card's stop and/or route; changed only through the
-    /// transitions under "Selection" so their side effects stay in one place.
-    @State private var selection = Selection()
     /// Shared sheet detents, bound only by `SheetHost`; this view reads them
     /// solely in untracked framing methods (see `onCardDetentChange`).
     @State private var sheetModel = SheetModel()
-    /// Per-direction route data + the selected direction, shared with the map
-    /// and the card's `RouteDetailList`.
-    @State private var routeDetail = RouteDetailStore()
-    /// The in-flight route load; cancelled when the route changes or closes.
-    @State private var routeLoadTask: Task<Void, Never>?
-    /// Live vehicles, polled while a detail card is open (scoped to it).
-    @State private var vehicleStore = VehicleStore()
-    /// Stop IDs served by a boat route — rendered with a ferry glyph.
-    @State private var boatStopIDs: Set<Foli.Stop.ID> = []
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -69,12 +54,12 @@ struct HomeView: View {
                     selectedStopID: stopSelection,
                     mapScope: mapScope,
                     displayedStops: displayedStops,
-                    boatStopIDs: boatStopIDs,
-                    direction: routeDetail.selectedDirection,
-                    routeColor: selection.route?.color ?? .accentColor,
+                    boatStopIDs: model.boatStopIDs,
+                    direction: model.routeDetail.selectedDirection,
+                    routeColor: model.selection.route?.color ?? .accentColor,
                     isZoomedIn: isZoomedIn,
-                    routeIsSelected: selection.route != nil,
-                    vehicles: vehicleStore.displayVehicles(at: context.date),
+                    routeIsSelected: model.selection.route != nil,
+                    vehicles: model.vehicles.displayVehicles(at: context.date),
                     lineRoutes: lineRoutes
                 )
                 .ignoresSafeArea(edges: .bottom)
@@ -90,7 +75,7 @@ struct HomeView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 // Live data; don't burn it in the background.
-                vehicleStore.isPaused = phase != .active
+                model.vehicles.isPaused = phase != .active
             }
 
             // Controls overlay, top-right: the scoped compass (bound to the
@@ -98,7 +83,7 @@ struct HomeView: View {
             // — custom because the native one centers the user at the map's
             // midpoint, behind the sheets, with no tap hook to reframe.
             VStack(spacing: 12) {
-                MapLocateButton(isAuthorized: locationManager.isAuthorized, action: recenterOnUser)
+                MapLocateButton(isAuthorized: model.location.isAuthorized, action: recenterOnUser)
                 MapCompass(scope: mapScope)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -107,44 +92,31 @@ struct HomeView: View {
             .accessibilityHidden(true)
 
             SheetHost(
-                selection: selection,
+                selection: model.selection,
                 selectedStopID: stopSelection,
                 selectedRoute: routeSelection,
                 sheetModel: sheetModel,
-                onClose: closeCard,
+                onClose: model.closeCard,
                 onCardDetentChange: reframeSelection
             )
         }
         .mapScope(mapScope)
-        .environment(locationManager)
-        .environment(stopsStore)
-        .environment(routesStore)
-        .environment(routeDetail)
         .task {
-            let foli = foli
-            async let stops: Void = stopsStore.load { try await foli.fetchStops() }
-            async let routes: Void = routesStore.load { try await foli.fetchRoutes() }
-            _ = await (stops, routes)
+            await model.loadStopsAndRoutes()
             // Center once stops are in (markers for the first region need
             // them), without waiting on the slower ferry-stop lookup.
             async let centered: Void = centerOnUser()
-            if let routes = routesStore.state.value {
-                boatStopIDs = await Self.boatStopIDs(routes: routes, using: foli)
-            }
+            await model.loadBoatStops()
             await centered
         }
     }
 
     // MARK: - Map content
 
-    private var allStops: [Foli.Stop] {
-        stopsStore.state.value ?? []
-    }
-
     /// The route per line number (SIRI `lineRef` == `route.shortName`, not the
     /// internal route id), for coloring live vehicle pins.
     private var lineRoutes: [String: Foli.Route] {
-        Dictionary((routesStore.state.value ?? []).map { ($0.shortName, $0) },
+        Dictionary((model.routes.state.value ?? []).map { ($0.shortName, $0) },
                    uniquingKeysWith: { first, _ in first })
     }
 
@@ -163,9 +135,9 @@ struct HomeView: View {
     /// back to the route if one is under it.
     private var stopSelection: Binding<Foli.Stop.ID?> {
         Binding(
-            get: { selection.stop?.id },
+            get: { model.selection.stop?.id },
             set: { id in
-                if let id { selectStop(id: id) } else { closeStop() }
+                if let id { selectStop(id: id) } else { model.closeStop() }
             }
         )
     }
@@ -173,17 +145,17 @@ struct HomeView: View {
     /// The route selection as the lists see it; nil closes the card.
     private var routeSelection: Binding<Foli.Route?> {
         Binding(
-            get: { selection.route },
+            get: { model.selection.route },
             set: { route in
-                if let route { selectRoute(route) } else { closeCard() }
+                if let route { selectRoute(route) } else { model.closeCard() }
             }
         )
     }
 
     /// Presents (or swaps) the stop card and frames the stop above it.
     private func selectStop(id: Foli.Stop.ID) {
-        guard id != selection.stop?.id,
-              let found = allStops.first(where: { $0.id == id }),
+        guard id != model.selection.stop?.id,
+              let found = model.stop(withID: id),
               let coordinate = found.location?.toCLCoordinate() else { return }
         // Every stop-card change re-opens at .medium — a tall or peek detent
         // carried over from the previous content buries the reframed map.
@@ -197,64 +169,14 @@ struct HomeView: View {
         // Recenter BEFORE presenting the card: the concurrent sheet transition
         // can make MapKit skip the camera animation and drop the zoom.
         frameSelectedStop(at: coordinate)
-        selection.stop = found
-        updateVehicleMonitoring()
+        model.selectStop(found)
     }
 
-    /// Opens the route card (routes come from the master list, so no stop is
-    /// up) and loads its per-direction data.
+    /// Opens the route card at the default detent; frames the route once its
+    /// directions load (Picker switches later just redraw the line/pins).
     private func selectRoute(_ route: Foli.Route) {
-        guard route != selection.route else { return }
-        selection = Selection(route: route)
-        loadRoute(route)
-        updateVehicleMonitoring()
-    }
-
-    /// Pops the stop card: back to the route under it, else to the lists.
-    private func closeStop() {
-        guard selection.stop != nil else { return }
-        selection.stop = nil
-        updateVehicleMonitoring()
-    }
-
-    /// Closes the card entirely, from however deep, back to the lists.
-    private func closeCard() {
-        guard !selection.isEmpty else { return }
-        selection = Selection()
-        cancelRouteLoad()
-        routeDetail.reset()
-        updateVehicleMonitoring()
-    }
-
-    private func cancelRouteLoad() {
-        routeLoadTask?.cancel()
-        routeLoadTask = nil
-    }
-
-    /// Loads the route's per-direction data, superseding any earlier load.
-    private func loadRoute(_ route: Foli.Route) {
-        cancelRouteLoad()
-        let foli = foli
-        // Cards are always fresh here (routes come from the lists): default detent.
         sheetModel.cardDetent = .medium
-        routeLoadTask = Task {
-            await routeDetail.load(routeId: route.id, using: foli)
-            guard !Task.isCancelled else { return }
-            // Frame only on open; Picker switches just redraw the line/pins.
-            frameSelectedDirection()
-        }
-    }
-
-    /// Keeps vehicle polling in step with the open card (stop scope wins);
-    /// no card open stops the poller.
-    private func updateVehicleMonitoring() {
-        if let stop = selection.stop {
-            vehicleStore.start(.stop(stop.id), using: foli)
-        } else if let route = selection.route {
-            vehicleStore.start(.line(route.shortName), using: foli)
-        } else {
-            vehicleStore.stopMonitoring()
-        }
+        model.selectRoute(route, onLoaded: frameSelectedDirection)
     }
 
     /// Applies a selection/user framing: re-issues the live camera's zoom and
@@ -294,9 +216,9 @@ struct HomeView: View {
     /// `SheetHost` from untracked context — never read from `body`.
     private func reframeSelection() {
         let anchor: CLLocationCoordinate2D
-        if let coordinate = selection.stop?.location?.toCLCoordinate() {
+        if let coordinate = model.selection.stop?.location?.toCLCoordinate() {
             anchor = coordinate
-        } else if let direction = routeDetail.selectedDirection {
+        } else if let direction = model.routeDetail.selectedDirection {
             let coords = direction.path.isEmpty
                 ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
                 : direction.path
@@ -332,7 +254,7 @@ struct HomeView: View {
     /// not centered behind it.
     private func frameSelectedDirection() {
         // The stop card wins: never re-frame the route over it.
-        guard selection.stop == nil, let direction = routeDetail.selectedDirection else { return }
+        guard model.selection.stop == nil, let direction = model.routeDetail.selectedDirection else { return }
         let coords = direction.path.isEmpty
             ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
             : direction.path
@@ -364,22 +286,6 @@ struct HomeView: View {
 
     // MARK: - Helpers
 
-    /// Stop IDs served by a ferry route (GTFS `route_type` 4): ferry routes →
-    /// trips → stop times. Failures skip a trip (bus fallback).
-    private static func boatStopIDs(routes: [Foli.Route], using foli: FoliService) async -> Set<Foli.Stop.ID> {
-        let ferryRouteIDs = routes.filter { $0.type == 4 }.map(\.id)
-        guard !ferryRouteIDs.isEmpty else { return [] }
-        var ids: Set<Foli.Stop.ID> = []
-        for routeID in ferryRouteIDs {
-            guard let trips = try? await foli.fetchTrips(forRoute: routeID) else { continue }
-            for trip in trips {
-                guard let stopTimes = try? await foli.fetchStopTimes(forTrip: trip.tripId) else { continue }
-                ids.formUnion(stopTimes.compactMap(\.stopId))
-            }
-        }
-        return ids
-    }
-
     /// Refreshes markers for a settled region, skipping no-op changes (a detent
     /// change fires `onMapCameraChange` with a barely changed region).
     private func updateDisplayedStops(for region: MKCoordinateRegion) {
@@ -404,15 +310,15 @@ struct HomeView: View {
             ... (region.center.latitude + region.span.latitudeDelta / 2)
         let lonRange = (region.center.longitude - region.span.longitudeDelta / 2)
             ... (region.center.longitude + region.span.longitudeDelta / 2)
-        return allStops.within(latRange: latRange, lonRange: lonRange)
+        return model.allStops.within(latRange: latRange, lonRange: lonRange)
     }
 
     /// Centers on the user once a fix arrives (briefly polled; the map doesn't
     /// live-recenter).
     private func centerOnUser() async {
-        guard locationManager.isAuthorized else { return }
+        guard model.location.isAuthorized else { return }
         for _ in 0..<20 {
-            if let coordinate = locationManager.currentLocation {
+            if let coordinate = model.location.currentLocation {
                 // Shift south so the user sits above the sheet.
                 let nudge = (1 - visibleFraction(for: sheetModel.listDetent)) / 2
                 let center = CLLocationCoordinate2D(
@@ -435,8 +341,8 @@ struct HomeView: View {
     /// The locate button's action: recenter on the user at the current zoom
     /// and orientation, framed above whatever sheet is up.
     private func recenterOnUser() {
-        guard locationManager.isAuthorized, let coordinate = locationManager.currentLocation else { return }
-        let detent = !selection.isEmpty ? sheetModel.cardDetent : sheetModel.listDetent
+        guard model.location.isAuthorized, let coordinate = model.location.currentLocation else { return }
+        let detent = !model.selection.isEmpty ? sheetModel.cardDetent : sheetModel.listDetent
         moveCamera(anchor: coordinate, nudge: (1 - visibleFraction(for: detent)) / 2)
     }
 }
@@ -504,4 +410,5 @@ private extension MKCoordinateRegion {
 
 #Preview {
     HomeView()
+        .environment(AppModel(client: DefaultFoliClientProvider().client()))
 }

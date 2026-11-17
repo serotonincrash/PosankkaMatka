@@ -15,10 +15,15 @@ import FoliBusUI
 @MainActor
 @Observable
 final class RouteDetailStore {
+    private let client: FoliClient
     /// Per-direction data; a fresh store per route clears stale data to `.loading`.
     private(set) var directions = ResourceStore<[RouteDirection]>()
     /// The direction currently shown across map + list.
     var selectedDirectionId: Int?
+
+    init(client: FoliClient) {
+        self.client = client
+    }
 
     var allDirections: [RouteDirection] { directions.state.value ?? [] }
     var selectedDirection: RouteDirection? {
@@ -26,11 +31,11 @@ final class RouteDetailStore {
     }
 
     /// Loads directions and selects the first; resets first so a new route doesn't flash the old one.
-    func load(routeId: String, using foli: FoliService) async {
+    func load(routeId: String) async {
         selectedDirectionId = nil
         let store = ResourceStore<[RouteDirection]>()
         directions = store
-        await store.load(Self.fetch(routeId: routeId, using: foli))
+        await store.load(Self.fetch(routeId: routeId, client: client))
         // Superseded by another load or a reset while in flight: selecting a
         // direction now would draw a stale route with no card up.
         guard !Task.isCancelled, directions === store else { return }
@@ -45,17 +50,17 @@ final class RouteDetailStore {
     }
 
     /// route → per-direction stops + path; one representative trip per direction yields both, fetched concurrently.
-    private static func fetch(routeId: String, using foli: FoliService) -> @Sendable () async throws -> [RouteDirection] {
+    private static func fetch(routeId: String, client: FoliClient) -> @Sendable () async throws -> [RouteDirection] {
         return {
-            let trips = try await foli.fetchTrips(forRoute: routeId)
+            let trips = try await client.fetchTrips(forRoute: routeId)
             let byDirection = Dictionary(grouping: trips, by: \.directionId)
             return try await withThrowingTaskGroup(of: RouteDirection.self) { group in
                 for (directionId, directionTrips) in byDirection {
                     // Dictionary(grouping:) never yields empty arrays.
                     let trip = directionTrips[0]
                     group.addTask {
-                        async let stops = resolveStops(tripId: trip.tripId, using: foli)
-                        async let path = resolvePath(shapeId: trip.shapeId, using: foli)
+                        async let stops = resolveStops(tripId: trip.tripId, client: client)
+                        async let path = resolvePath(shapeId: trip.shapeId, client: client)
                         return RouteDirection(
                             id: directionId,
                             headsign: trip.tripHeadsign,
@@ -72,21 +77,21 @@ final class RouteDetailStore {
         }
     }
 
-    private static func resolveStops(tripId: String, using foli: FoliService) async throws -> [Foli.Stop] {
-        let stopTimes = try await foli.fetchStopTimes(forTrip: tripId)
+    private static func resolveStops(tripId: String, client: FoliClient) async throws -> [Foli.Stop] {
+        let stopTimes = try await client.fetchStopTimes(forTrip: tripId)
             .sorted { $0.stopSequence < $1.stopSequence }
         var stops: [Foli.Stop] = []
         for stopTime in stopTimes {
             guard let stopId = stopTime.stopId else { continue }
-            if let stop = try? await foli.fetchStop(id: stopId) {
+            if let stop = try? await client.stop(for: stopId) {
                 stops.append(stop)
             }
         }
         return stops
     }
 
-    private static func resolvePath(shapeId: String, using foli: FoliService) async -> [CLLocationCoordinate2D] {
-        guard let points = try? await foli.fetchShapePoints(forShape: shapeId) else { return [] }
+    private static func resolvePath(shapeId: String, client: FoliClient) async -> [CLLocationCoordinate2D] {
+        guard let points = try? await client.fetchShapePoints(forShape: shapeId) else { return [] }
         return points.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
     }
 }
