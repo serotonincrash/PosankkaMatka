@@ -45,6 +45,8 @@ struct HomeView: View {
     /// Per-direction route data + the selected direction, shared with the map
     /// and the card's `RouteDetailList`.
     @State private var routeDetail = RouteDetailStore()
+    /// The in-flight route load; cancelled when the route changes or closes.
+    @State private var routeLoadTask: Task<Void, Never>?
     /// Live vehicles, polled while a detail card is open (scoped to it).
     @State private var vehicleStore = VehicleStore()
     /// Stop IDs served by a boat route — rendered with a ferry glyph.
@@ -194,6 +196,8 @@ struct HomeView: View {
 
     /// Loads the route's per-direction data; deselecting clears it.
     private func handleRouteSelection(_ route: Foli.Route?) {
+        routeLoadTask?.cancel()
+        routeLoadTask = nil
         guard let route else {
             routeDetail.reset()
             return
@@ -201,8 +205,9 @@ struct HomeView: View {
         let foli = foli
         // Cards are always fresh here (routes come from the lists): default detent.
         sheetModel.cardDetent = .medium
-        Task {
+        routeLoadTask = Task {
             await routeDetail.load(routeId: route.id, using: foli)
+            guard !Task.isCancelled else { return }
             // Frame only on open; Picker switches just redraw the line/pins.
             frameSelectedDirection()
         }

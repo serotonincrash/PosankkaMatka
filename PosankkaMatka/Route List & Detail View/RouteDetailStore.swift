@@ -28,13 +28,20 @@ final class RouteDetailStore {
     /// Loads directions and selects the first; resets first so a new route doesn't flash the old one.
     func load(routeId: String, using foli: FoliService) async {
         selectedDirectionId = nil
-        directions = ResourceStore<[RouteDirection]>()
-        await directions.load(Self.fetch(routeId: routeId, using: foli))
+        let store = ResourceStore<[RouteDirection]>()
+        directions = store
+        await store.load(Self.fetch(routeId: routeId, using: foli))
+        // Superseded by another load or a reset while in flight: selecting a
+        // direction now would draw a stale route with no card up.
+        guard !Task.isCancelled, directions === store else { return }
         selectedDirectionId = allDirections.first?.id
     }
 
+    /// Clears the selection and swaps in a fresh store, so an in-flight load
+    /// sees it was superseded and doesn't re-select a direction.
     func reset() {
         selectedDirectionId = nil
+        directions = ResourceStore<[RouteDirection]>()
     }
 
     /// route → per-direction stops + path; one representative trip per direction yields both, fetched concurrently.
