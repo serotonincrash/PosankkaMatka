@@ -32,6 +32,10 @@ struct HomeView: View {
     @State private var lastMarkerRegion: MKCoordinateRegion?
     /// Read here only outside `body`, so detent drags don't re-render the map.
     @State private var sheetModel = SheetModel()
+    /// The camera tracks the vehicle card's bus until the user moves the map.
+    @State private var isFollowing = false
+    /// Per-tick follow bookkeeping; a plain class so writes don't re-render.
+    @State private var follow = FollowState()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -40,16 +44,19 @@ struct HomeView: View {
         ZStack {
             // Ticks only the map, for interpolated vehicle positions.
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                let tracked = model.journey(at: context.date)
+                let vehicleOnTop = model.selection.vehicle != nil
                 MapView(
                     camera: $camera,
                     selection: mapSelection,
                     mapScope: mapScope,
                     displayedStops: displayedStops,
                     boatStopIDs: model.boatStopIDs,
-                    direction: model.routeDetail.selectedDirection,
+                    direction: vehicleOnTop ? nil : model.routeDetail.selectedDirection,
                     routeColor: model.selection.route?.color ?? .accentColor,
                     isZoomedIn: isZoomedIn,
-                    routeIsSelected: model.selection.route != nil,
+                    hidesViewportStops: model.selection.route != nil || vehicleOnTop,
+                    journey: tracked.map(journeyOverlay),
                     vehicles: model.vehicles.displayVehicles(at: context.date),
                     lineRoutes: lineRoutes,
                     selectedVehicleRef: model.selection.vehicle?.vehicleRef
@@ -62,18 +69,32 @@ struct HomeView: View {
                     liveCamera = context.camera
                     updateDisplayedStops(for: context.region)
                 }
+                .onChange(of: context.date) {
+                    followTick(tracked?.position.coordinate.toCLCoordinate())
+                }
             }
             .onChange(of: scenePhase) { _, phase in
                 model.vehicles.isPaused = phase != .active
             }
+            .onChange(of: camera.positionedByUser) { _, byUser in
+                if byUser { isFollowing = false }
+            }
+            .onChange(of: model.selection.vehicle) { _, key in
+                vehicleCardChanged(to: key)
+            }
 
             VStack(spacing: 12) {
-                MapLocateButton(isAuthorized: model.location.isAuthorized, action: recenterOnUser)
-                MapCompass(scope: mapScope)
+                Group {
+                    MapLocateButton(isAuthorized: model.location.isAuthorized, action: recenterOnUser)
+                    MapCompass(scope: mapScope)
+                }
+                .accessibilityHidden(true)
+                if model.selection.vehicle != nil {
+                    FollowBusButton(isFollowing: isFollowing, action: resumeFollowing)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .padding(.trailing, 16)
-            .accessibilityHidden(true)
 
             SheetHost(
                 selection: model.selection,
@@ -107,6 +128,62 @@ struct HomeView: View {
     private var isZoomedIn: Bool {
         guard let span = visibleRegion?.span.latitudeDelta else { return false }
         return span <= Self.markerThreshold
+    }
+
+    private func journeyOverlay(
+        _ tracked: (journey: VehicleJourney, position: VehicleTracker.Position, lastSeen: Date?)
+    ) -> JourneyOverlay {
+        let split = tracked.journey.splitPath(at: tracked.position.coordinate)
+        return JourneyOverlay(
+            travelled: split.travelled,
+            remaining: split.remaining,
+            calls: tracked.journey.calls,
+            color: model.route(forLine: tracked.journey.trip.lineRef)?.color ?? .accentColor
+        )
+    }
+
+    // MARK: - Follow camera
+
+    /// Street-level distance (m) for a bus framed from further out.
+    private static let followDistance: Double = 2_500
+
+    private func vehicleCardChanged(to key: TripKey?) {
+        guard key != nil else {
+            isFollowing = false
+            return
+        }
+        // Opened from a puck or a stop card's arrival: either way at .medium.
+        if sheetModel.cardDetent != .medium {
+            sheetModel.suppressDetentReframe = true
+            sheetModel.cardDetent = .medium
+        }
+        isFollowing = true
+        follow.distance = min(liveCamera?.distance ?? Self.followDistance, Self.followDistance)
+        follow.needsFraming = true
+        followTick(model.journey(at: .now)?.position.coordinate.toCLCoordinate())
+    }
+
+    private func followTick(_ coordinate: CLLocationCoordinate2D?) {
+        guard let coordinate else { return }
+        follow.lastCoordinate = coordinate
+        guard isFollowing else { return }
+        let nudge = (1 - visibleFraction(for: sheetModel.cardDetent)) / 2
+        if follow.needsFraming {
+            follow.needsFraming = false
+            moveCamera(anchor: coordinate, nudge: nudge, distance: follow.distance,
+                       animation: .easeInOut(duration: 0.4))
+        } else {
+            // Linear over one tick, so per-tick moves join into one glide.
+            moveCamera(anchor: coordinate, nudge: nudge, distance: follow.distance,
+                       animation: .linear(duration: 0.5))
+        }
+    }
+
+    private func resumeFollowing() {
+        isFollowing = true
+        follow.distance = liveCamera?.distance ?? Self.followDistance
+        follow.needsFraming = true
+        followTick(follow.lastCoordinate)
     }
 
     // MARK: - Selection
@@ -162,11 +239,7 @@ struct HomeView: View {
         guard ref != model.selection.vehicle?.vehicleRef,
               let vehicle = model.vehicles.displayVehicles(at: .now).first(where: { $0.id == ref })?.vehicle
         else { return }
-        if sheetModel.cardDetent != .medium {
-            sheetModel.suppressDetentReframe = true
-            sheetModel.cardDetent = .medium
-        }
-        // PHASE2: frame the bus and start the follow camera here.
+        // Detent and follow camera are set up in `vehicleCardChanged`.
         model.selectVehicle(TripKey(vehicle))
     }
 
@@ -193,24 +266,31 @@ struct HomeView: View {
 
     /// Moves only the center, along the screen's vertical axis, keeping the
     /// live zoom and heading so rotated maps still seat above the sheet.
-    private func moveCamera(anchor: CLLocationCoordinate2D, nudge: CGFloat) {
+    /// `distance` overrides the live zoom.
+    private func moveCamera(
+        anchor: CLLocationCoordinate2D,
+        nudge: CGFloat,
+        distance: Double? = nil,
+        animation: Animation = .default
+    ) {
         guard let cam = liveCamera else { return }
+        let distance = distance ?? cam.distance
         let heading = cam.heading * .pi / 180
         // Longitude degrees shrink with latitude.
         let scale = max(cos(anchor.latitude * .pi / 180), 0.2)
         // Bounding span = width·|sin h| + height·|cos h|; recover the height
-        // assuming a portrait phone's ~2:1 aspect.
-        let bbox = visibleRegion?.span.latitudeDelta ?? Self.defaultSpan.latitudeDelta
+        // assuming a portrait phone's ~2:1 aspect. The span scales with distance.
+        let bbox = (visibleRegion?.span.latitudeDelta ?? Self.defaultSpan.latitudeDelta) * distance / cam.distance
         let height = bbox / (abs(cos(heading)) + abs(sin(heading)) / 2)
         let (upEast, upNorth) = (sin(heading), cos(heading))
         let center = CLLocationCoordinate2D(
             latitude: anchor.latitude - nudge * height * upNorth,
             longitude: anchor.longitude - nudge * height * upEast / scale
         )
-        withAnimation(reduceMotion ? nil : .default) {
+        withAnimation(reduceMotion ? nil : animation) {
             camera = .camera(MapCamera(
                 centerCoordinate: center,
-                distance: cam.distance,
+                distance: distance,
                 heading: cam.heading,
                 pitch: cam.pitch
             ))
@@ -232,7 +312,9 @@ struct HomeView: View {
             else { return }
             anchor = center
         case .vehicle:
-            return  // PHASE2: the follow camera owns framing.
+            // Re-seat the followed bus for the new inset; unfollowed, leave the map alone.
+            guard isFollowing, let coordinate = follow.lastCoordinate else { return }
+            anchor = coordinate
         case nil:
             return
         }
@@ -333,6 +415,7 @@ struct HomeView: View {
 
     private func recenterOnUser() {
         guard model.location.isAuthorized, let coordinate = model.location.currentLocation else { return }
+        isFollowing = false
         let detent = !model.selection.isEmpty ? sheetModel.cardDetent : sheetModel.listDetent
         moveCamera(anchor: coordinate, nudge: (1 - visibleFraction(for: detent)) / 2)
     }
@@ -364,6 +447,43 @@ private struct MapLocateButton: View {
         .buttonStyle(.plain)
         .disabled(!isAuthorized)
         .accessibilityLabel("Show my location")
+    }
+}
+
+private final class FollowState {
+    var lastCoordinate: CLLocationCoordinate2D?
+    var distance: Double = 2_500
+    /// The next tick frames (zooms) rather than glides.
+    var needsFraming = false
+}
+
+/// Resumes following the vehicle card's bus after the user moved the map.
+private struct FollowBusButton: View {
+    let isFollowing: Bool
+    let action: () -> Void
+    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
+
+    private var label: some View {
+        Image(systemName: isFollowing ? "scope" : "location.viewfinder")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(isFollowing ? Color.accentColor : Color.primary)
+            .frame(width: buttonSize, height: buttonSize)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            if #available(iOS 26.0, *) {
+                label.glassEffect(.regular.interactive(), in: Circle())
+            } else {
+                label
+                    .background(Circle().fill(.background))
+                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Follow Bus")
+        .accessibilityHint(isFollowing ? "" : "Keeps the map centered on the bus")
+        .accessibilityAddTraits(isFollowing ? .isSelected : [])
     }
 }
 

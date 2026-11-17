@@ -17,6 +17,14 @@ enum MapItem: Hashable {
     case vehicle(String)
 }
 
+/// A tracked bus's trip, split where the bus is.
+struct JourneyOverlay {
+    let travelled: [Foli.Coordinate]
+    let remaining: [Foli.Coordinate]
+    let calls: [VehicleJourney.Call]
+    let color: Color
+}
+
 /// The map: user location, stop markers, the selected route, and live vehicles.
 struct MapView: View {
     @Binding var camera: MapCameraPosition
@@ -28,8 +36,10 @@ struct MapView: View {
     let direction: RouteDirection?
     let routeColor: Color
     let isZoomedIn: Bool
-    /// Viewport markers hide while a route is selected (they'd show through during load).
-    let routeIsSelected: Bool
+    /// While a route or vehicle card is up (markers would show through during load).
+    let hidesViewportStops: Bool
+    /// Drawn instead of `direction` while a vehicle card is on top.
+    let journey: JourneyOverlay?
     /// Vehicles with interpolated positions.
     let vehicles: [VehicleTracker.Position]
     /// Route per line number (`lineRef` == short name), for pin colors.
@@ -96,7 +106,10 @@ struct MapView: View {
                 .annotationTitles(.hidden)
             }
         }
-        if !routeIsSelected {
+        if let journey {
+            journeyContent(journey)
+        }
+        if !hidesViewportStops {
             ForEach(displayedStops) { stop in
                 if let coordinate = stop.location?.toCLCoordinate() {
                     // System Marker for MapKit's label decluttering.
@@ -119,23 +132,68 @@ struct MapView: View {
         }
     }
 
+    @MapContentBuilder
+    private func journeyContent(_ journey: JourneyOverlay) -> some MapContent {
+        let lineStyle = StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+        if journey.travelled.count >= 2 {
+            MapPolyline(coordinates: journey.travelled.map { $0.toCLCoordinate() })
+                .stroke(Self.travelledColor, style: lineStyle)
+        }
+        if journey.remaining.count >= 2 {
+            MapPolyline(coordinates: journey.remaining.map { $0.toCLCoordinate() })
+                .stroke(journey.color, style: lineStyle)
+        }
+        let terminusID = journey.calls.last?.id
+        ForEach(journey.calls) { call in
+            if let coordinate = call.coordinate?.toCLCoordinate() {
+                if call.id == terminusID {
+                    Annotation(call.name, coordinate: coordinate) {
+                        routeEndpointPin(systemImage: "flag.checkered", color: journey.color)
+                    }
+                    .annotationTitles(.hidden)
+                    .tag(MapItem.stop(call.stopID))
+                } else if call.state == .passed {
+                    // Untagged: passed stops are context, not destinations.
+                    Annotation(call.name, coordinate: coordinate) {
+                        routeStopDot(color: Self.travelledColor)
+                    }
+                    .annotationTitles(.hidden)
+                } else if isZoomedIn {
+                    Marker(call.name, systemImage: boatStopIDs.contains(call.stopID) ? "ferry.fill" : "bus.fill",
+                           coordinate: coordinate)
+                        .tint(journey.color)
+                        .tag(MapItem.stop(call.stopID))
+                } else {
+                    Annotation(call.name, coordinate: coordinate) {
+                        routeStopDot(color: journey.color)
+                    }
+                    .annotationTitles(.hidden)
+                }
+            }
+        }
+    }
+
+    private static let travelledColor = Color.gray.opacity(0.6)
+
     private func markerSystemImage(for stop: Foli.Stop) -> String {
         boatStopIDs.contains(stop.id) ? "ferry.fill" : "bus.fill"
     }
 
-    private func routeEndpointPin(systemImage: String) -> some View {
+    private func routeEndpointPin(systemImage: String, color: Color? = nil) -> some View {
         Image(systemName: systemImage)
             .font(.headline)
             .foregroundStyle(.white)
             .padding(8)
-            .background(routeColor, in: Circle())
+            .background(color ?? routeColor, in: Circle())
             .overlay(Circle().stroke(.white, lineWidth: 2))
             .shadow(radius: 2)
     }
 
-    private var routeStopDot: some View {
+    private var routeStopDot: some View { routeStopDot(color: routeColor) }
+
+    private func routeStopDot(color: Color) -> some View {
         Circle()
-            .fill(routeColor)
+            .fill(color)
             .frame(width: 12, height: 12)
             .overlay(Circle().stroke(.white, lineWidth: 2))
     }
