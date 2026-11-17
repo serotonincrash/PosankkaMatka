@@ -22,16 +22,18 @@ final class SheetModel {
     var suppressDetentReframe = false
 }
 
-/// The lists sheet and the detail card, as sibling sheets. Stop and route
-/// swap as content inside one card: re-presenting mid-dismiss comes up with
-/// default config. Neither sheet swipe-dismisses; the card has a close button.
+/// The lists sheet and the detail card, as sibling sheets. The card stack's
+/// top swaps as content inside one card: re-presenting mid-dismiss comes up
+/// with default config. Neither sheet swipe-dismisses; the card has a close button.
 struct SheetHost: View {
     let selection: Selection
     /// Setters run `HomeView`'s selection transitions.
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
     @Bindable var sheetModel: SheetModel
+    /// Pops the top card.
     let onClose: () -> Void
+    let onCloseAll: () -> Void
     let onCardDetentChange: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -52,14 +54,21 @@ struct SheetHost: View {
                 .allowsHitTesting(false)
                 .sheet(isPresented: cardPresented) {
                     cardChrome {
-                        if let stop = selection.stop {
+                        switch selection.top {
+                        case .stop(let stop):
                             StopView(stop: stop)
                                 // New identity per stop, so arrivals re-fetch.
                                 .id(stop.id)
                                 .transition(cardTransition)
-                        } else if let route = selection.route {
+                        case .route(let route):
                             RouteDetailList(route: route, selectedStopID: $selectedStopID)
                                 .transition(cardTransition)
+                        case .vehicle(let key):
+                            VehicleCardView(key: key)
+                                .id(key)
+                                .transition(cardTransition)
+                        case nil:
+                            EmptyView()
                         }
                     }
                 }
@@ -81,7 +90,8 @@ struct SheetHost: View {
             .animation(.spring(duration: 0.3), value: selection)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    CardCloseButton(action: onClose)
+                    CardCloseButton(isStacked: selection.cards.count > 1,
+                                    close: onClose, closeAll: onCloseAll)
                 }
             }
         }
@@ -114,14 +124,30 @@ struct SheetHost: View {
     }
 }
 
+/// Tap pops one card; long-press offers Close All when cards are stacked.
 private struct CardCloseButton: View {
-    let action: () -> Void
+    let isStacked: Bool
+    let close: () -> Void
+    let closeAll: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark")
+        if isStacked {
+            Menu {
+                Button("Close All", systemImage: "xmark.circle", action: closeAll)
+            } label: {
+                Image(systemName: "xmark")
+            } primaryAction: {
+                close()
+            }
+            .accessibilityLabel("Close")
+            .accessibilityHint("Returns to the previous card")
+            .accessibilityAction(named: "Close All", closeAll)
+        } else {
+            Button(action: close) {
+                Image(systemName: "xmark")
+            }
+            .accessibilityLabel("Close")
+            .accessibilityHint("Returns to the stop and route lists")
         }
-        .accessibilityLabel("Close")
-        .accessibilityHint("Returns to the stop and route lists")
     }
 }

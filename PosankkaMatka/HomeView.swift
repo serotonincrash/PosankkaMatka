@@ -42,7 +42,7 @@ struct HomeView: View {
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
                 MapView(
                     camera: $camera,
-                    selectedStopID: stopSelection,
+                    selection: mapSelection,
                     mapScope: mapScope,
                     displayedStops: displayedStops,
                     boatStopIDs: model.boatStopIDs,
@@ -51,7 +51,8 @@ struct HomeView: View {
                     isZoomedIn: isZoomedIn,
                     routeIsSelected: model.selection.route != nil,
                     vehicles: model.vehicles.displayVehicles(at: context.date),
-                    lineRoutes: lineRoutes
+                    lineRoutes: lineRoutes,
+                    selectedVehicleRef: model.selection.vehicle?.vehicleRef
                 )
                 .ignoresSafeArea(edges: .bottom)
                 // Everything on the map is reachable through the sheets.
@@ -79,7 +80,8 @@ struct HomeView: View {
                 selectedStopID: stopSelection,
                 selectedRoute: routeSelection,
                 sheetModel: sheetModel,
-                onClose: model.closeCard,
+                onClose: model.closeTop,
+                onCloseAll: model.closeAll,
                 onCardDetentChange: reframeSelection
             )
         }
@@ -109,13 +111,33 @@ struct HomeView: View {
 
     // MARK: - Selection
 
-    /// MapKit sets nil when empty map or the selected marker is tapped,
-    /// which pops the stop card.
+    /// MapKit sets nil when empty map or the selected item is tapped, which
+    /// pops a stop or vehicle card (not a route: that needs the X).
+    private var mapSelection: Binding<MapItem?> {
+        Binding(
+            get: {
+                switch model.selection.top {
+                case .stop(let stop): .stop(stop.id)
+                case .vehicle(let key): .vehicle(key.vehicleRef)
+                case .route, nil: nil
+                }
+            },
+            set: { item in
+                switch item {
+                case .stop(let id): selectStop(id: id)
+                case .vehicle(let ref): selectVehicle(ref: ref)
+                case nil: popTappedAwayCard()
+                }
+            }
+        )
+    }
+
+    /// For the lists and route card, which only ever set a stop.
     private var stopSelection: Binding<Foli.Stop.ID?> {
         Binding(
             get: { model.selection.stop?.id },
             set: { id in
-                if let id { selectStop(id: id) } else { model.closeStop() }
+                if let id { selectStop(id: id) } else { popTappedAwayCard() }
             }
         )
     }
@@ -124,9 +146,28 @@ struct HomeView: View {
         Binding(
             get: { model.selection.route },
             set: { route in
-                if let route { selectRoute(route) } else { model.closeCard() }
+                if let route { selectRoute(route) } else { model.closeAll() }
             }
         )
+    }
+
+    private func popTappedAwayCard() {
+        switch model.selection.top {
+        case .stop, .vehicle: model.closeTop()
+        case .route, nil: break
+        }
+    }
+
+    private func selectVehicle(ref: String) {
+        guard ref != model.selection.vehicle?.vehicleRef,
+              let vehicle = model.vehicles.displayVehicles(at: .now).first(where: { $0.id == ref })?.vehicle
+        else { return }
+        if sheetModel.cardDetent != .medium {
+            sheetModel.suppressDetentReframe = true
+            sheetModel.cardDetent = .medium
+        }
+        // PHASE2: frame the bus and start the follow camera here.
+        model.selectVehicle(TripKey(vehicle))
     }
 
     private func selectStop(id: Foli.Stop.ID) {
@@ -176,16 +217,23 @@ struct HomeView: View {
         }
     }
 
-    /// Re-seats the selection above a user-dragged card (stop wins over route).
+    /// Re-seats the top card's subject above a user-dragged card.
     private func reframeSelection() {
         let anchor: CLLocationCoordinate2D
-        if let coordinate = model.selection.stop?.location?.toCLCoordinate() {
+        switch model.selection.top {
+        case .stop(let stop):
+            guard let coordinate = stop.location?.toCLCoordinate() else { return }
             anchor = coordinate
-        } else if let direction = model.routeDetail.selectedDirection {
-            let coords = direction.framingCoordinates.map { $0.toCLCoordinate() }
-            guard let center = MKCoordinateRegion(enclosing: coords)?.center else { return }
+        case .route:
+            guard let direction = model.routeDetail.selectedDirection,
+                  let center = MKCoordinateRegion(
+                      enclosing: direction.framingCoordinates.map { $0.toCLCoordinate() }
+                  )?.center
+            else { return }
             anchor = center
-        } else {
+        case .vehicle:
+            return  // PHASE2: the follow camera owns framing.
+        case nil:
             return
         }
         let nudge = (1 - visibleFraction(for: sheetModel.cardDetent)) / 2
@@ -209,7 +257,8 @@ struct HomeView: View {
     }
 
     private func frameSelectedDirection() {
-        guard model.selection.stop == nil, let direction = model.routeDetail.selectedDirection else { return }
+        guard case .route = model.selection.top,
+              let direction = model.routeDetail.selectedDirection else { return }
         let coords = direction.framingCoordinates.map { $0.toCLCoordinate() }
         guard let region = MKCoordinateRegion(enclosing: coords) else { return }
 
