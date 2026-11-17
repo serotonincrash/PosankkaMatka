@@ -8,22 +8,20 @@
 import SwiftUI
 import FoliBusUI
 
-/// A route's colored line-number badge (route's GTFS colors), fixed to a
-/// three-character width.
+/// A route's colored line-number badge, at least three characters wide.
 struct RouteBadge: View {
     let route: Foli.Route
 
-    /// Shared monospaced font, so the hidden reference and visible text measure identically.
+    /// Shared so the hidden reference and visible text measure the same.
     private var badgeFont: Font { .subheadline.weight(.bold).monospaced() }
-    /// Chrome tracks the badge text under Dynamic Type instead of pinning.
+    /// Scale with Dynamic Type.
     @ScaledMetric(relativeTo: .subheadline) private var hPadding: CGFloat = 8
     @ScaledMetric(relativeTo: .subheadline) private var vPadding: CGFloat = 4
     @ScaledMetric(relativeTo: .subheadline) private var cornerRadius: CGFloat = 6
 
     var body: some View {
         ZStack {
-            // Invisible reference reserving a three-digit width. Longer codes
-            // (e.g. the "Lautta" ferry) still expand beyond it naturally.
+            // Hidden reference reserves three-digit width; longer codes ("Lautta") still grow.
             Text("000")
                 .font(badgeFont)
                 .hidden()

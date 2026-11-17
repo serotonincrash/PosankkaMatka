@@ -10,18 +10,14 @@ import FoliBusUI
 import Forever
 import PosankkaCore
 
-/// The home-sheet list (nearby stops + routes) with search and the distance
-/// filter. Reads resource stores from the environment; HomeView owns the stack.
+/// The home-sheet list with search and the distance filter.
 struct ListStopsView: View {
     @State var search = ""
     @Environment(AppModel.self) private var model
-    /// Nearby rows, recomputed only when an input changed (see `.task(id:)`).
     @State private var nearbyStops: [StopWithDistance] = []
 
-    /// Authorization, read from observable state instead of calling into
-    /// `CLLocationManager` from a `body`.
+    /// Read from observable state, not `CLLocationManager` in `body`.
     private var isLocationAuthorized: Bool { model.location.isAuthorized }
-    /// Persisted distance filter (cheap to read in `body`; writes persist + publish).
     @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
 
     @Binding var selectedStopID: Foli.Stop.ID?
@@ -44,8 +40,7 @@ struct ListStopsView: View {
                     selectedRoute: $selectedRoute
                 )
                 .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search stops or routes"))
-                // Recompute off the body path, keyed on stop set + rounded
-                // location + filter (sub-meter jitter ignored).
+                // Recompute off the body path; rounded location ignores sub-meter jitter.
                 .task(id: nearbyInputs(stops)) {
                     nearbyStops = nearbyRows(for: stops)
                 }
@@ -55,7 +50,7 @@ struct ListStopsView: View {
         }
     }
 
-    /// Nearby stops, nearest first. No location → empty (the list discloses why).
+    /// Nearest first; empty without location (the list explains why).
     private func nearbyRows(for stops: [Foli.Stop]) -> [StopWithDistance] {
         guard isLocationAuthorized, let coordinate = model.location.currentLocation else { return [] }
         let origin = Foli.Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -68,8 +63,7 @@ struct ListStopsView: View {
             .map { StopWithDistance($0.stop, distance: $0.distance) }
     }
 
-    /// Task identity for the nearby inputs; coordinates are rounded so sub-meter
-    /// GPS jitter doesn't retrigger the recompute.
+    /// Task identity; rounded coordinates avoid retriggering on GPS jitter.
     private func nearbyInputs(_ stops: [Foli.Stop]) -> String {
         let coordinate = isLocationAuthorized ? model.location.currentLocation : nil
         let latitude = coordinate.map { ($0.latitude * 100_000).rounded() } ?? 0

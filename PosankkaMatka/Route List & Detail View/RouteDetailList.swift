@@ -9,22 +9,19 @@ import SwiftUI
 import FoliBusUI
 import PosankkaCore
 
-/// The pushed route detail: a direction Picker above the selected direction's
-/// stops. `RouteDetailStore` is the shared source of truth, so the Picker drives
-/// the map and this list together.
+/// The pushed route detail: a direction Picker above that direction's stops.
 struct RouteDetailList: View {
     let route: Foli.Route
     @Binding var selectedStopID: Foli.Stop.ID?
     @Environment(AppModel.self) private var model
     private var routeDetail: RouteDetailStore { model.routeDetail }
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Steers VoiceOver past the sheet's grabber on appear.
+    /// Moves VoiceOver focus past the grabber.
     @AccessibilityFocusState private var focusSubtitle: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            // The corridor name as a quiet subtitle — the full name truncates
-            // as a large title.
+            // Subtitle: the full name truncates as a large title.
             if !route.longName.isEmpty {
                 Text(route.longName)
                     .font(.subheadline)
@@ -33,13 +30,11 @@ struct RouteDetailList: View {
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .padding(.bottom, routeDetail.allDirections.count > 1 ? 4 : 8)
-                    // Focus lands here on appear — the corridor name alone
-                    // doesn't say which route this is.
+                    // Focus lands here; the corridor name alone doesn't say which route.
                     .accessibilityLabel(route.spokenDescription)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($focusSubtitle)
             }
-            // Pinned above the list so it stays visible while the stops scroll.
             if routeDetail.allDirections.count > 1 {
                 directionPicker
                     .padding(.horizontal)
@@ -48,16 +43,13 @@ struct RouteDetailList: View {
 
             content
         }
-        // "Route N"; inline like the stop title — the card's bar keeps one
-        // display mode across content swaps.
+        // Inline: the card's bar keeps one display mode across content swaps.
         .navigationTitle("Route \(route.shortName)")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { focusSubtitle = true }
     }
 
-    /// The direction selector. Segments normally; a menu picker at
-    /// accessibility sizes — segments clip long headsigns, and HIG picks
-    /// menus where space is tight.
+    /// Menu at accessibility sizes; segments clip long headsigns.
     @ViewBuilder
     private var directionPicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
@@ -67,8 +59,7 @@ struct RouteDetailList: View {
         }
     }
 
-    /// Segmented style drops the Picker's title string from VoiceOver — the
-    /// explicit label keeps "Direction" in the announcement.
+    /// Segmented style drops the title from VoiceOver, so label it explicitly.
     private func directionPickerBody(_ style: some PickerStyle) -> some View {
         @Bindable var routeDetail = routeDetail
         return Picker("Direction", selection: $routeDetail.selectedDirectionId) {
@@ -81,7 +72,6 @@ struct RouteDetailList: View {
         .accessibilityHint("Switches which direction's stops are shown")
     }
 
-    /// The stop's short code — metadata, not a second title.
     private func stopCode(_ id: String) -> some View {
         Text(id)
             .font(.subheadline)
@@ -95,22 +85,18 @@ struct RouteDetailList: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .success:
-            // Empty directions ⇔ no trips; a direction with empty stops means
-            // trips exist but their stop times don't resolve.
+            // No directions means no trips; empty stops means stop times don't resolve.
             if routeDetail.allDirections.isEmpty {
                 ContentUnavailableView("Not Running", systemImage: "bus",
                                        description: Text("This route has no trips in the current service period."))
             } else if let direction = routeDetail.selectedDirection, !direction.stops.isEmpty {
-                // No section header — the direction is already shown by the
-                // picker (or the single-direction subtitle) above.
                 List {
                     Section {
                         ForEach(direction.stops) { stop in
                             Button {
                                 selectedStopID = stop.id
                             } label: {
-                                // Accessibility sizes stack the row (same
-                                // reasoning as the master list's stop rows).
+                                // Stacked at accessibility sizes.
                                 if dynamicTypeSize.isAccessibilitySize {
                                     VStack(alignment: .leading, spacing: 4) {
                                         stopCode(stop.id)
@@ -125,7 +111,6 @@ struct RouteDetailList: View {
                                 }
                             }
                             .tint(.primary)
-                            // Same phrasing as the master list's stop rows;
                             // Voice Control gets the short forms.
                             .accessibilityLabel(StopWithDistance(stop).spokenDescription)
                             .accessibilityHint("Opens live arrivals for this stop")

@@ -10,30 +10,23 @@ import UIKit
 import FoliBusUI
 import PosankkaCore
 
-/// The home-sheet list: "Nearby Stops" and "Routes". Tapping a row sets the shared
-/// selection the map reacts to.
+/// The home-sheet list: nearby stops and routes.
 struct HomeSheetList: View {
     @Environment(\.isSearching) var isSearching
 
-    /// Search text (read-only; `.searchable` owns the write).
     let search: String
     let stops: [Foli.Stop]
     let routes: [Foli.Route]
-    /// Precomputed nearby rows; empty cases are disclosed by `stopsDisclosure`.
     let nearbyStops: [StopWithDistance]
-    /// Whether location is authorized (resolved by the parent).
     let isLocationAuthorized: Bool
-    /// Distance filter, bound to the persisted `@Forever` value in the parent.
     @Binding var searchFilter: SortState
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
 
-    /// Idle "Nearby Stops" rows shown before the "Show all stops" disclosure.
     private static let nearbyLimit = 25
     @State private var showsAllNearbyStops = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Steers VoiceOver to the first header when the master sheet (re)presents
-    /// — after a card closes, focus would otherwise land on the grabber.
+    /// Moves VoiceOver focus off the grabber when the sheet re-presents.
     @AccessibilityFocusState private var focusStopsHeader: Bool
 
     var body: some View {
@@ -54,8 +47,7 @@ struct HomeSheetList: View {
                                         StopRow(stopWithDistance: stopWithDistance)
                                     }
                                     .tint(.primary)
-                                    // VoiceOver reads the full phrase; Voice
-                                    // Control can target the short forms.
+                                    // VoiceOver reads the full phrase; Voice Control gets the short forms.
                                     .accessibilityLabel(stopWithDistance.spokenDescription)
                                     .accessibilityHint("Opens live arrivals for this stop")
                                     .accessibilityInputLabels([
@@ -70,8 +62,7 @@ struct HomeSheetList: View {
                                 }
                             }
                         } header: {
-                            // Header trait: VoiceOver's Headings rotor jumps
-                            // between sections instead of swiping every row.
+                            // Header trait for the Headings rotor.
                             Text(stopSectionTitle)
                                 .accessibilityAddTraits(.isHeader)
                                 .accessibilityFocused($focusStopsHeader)
@@ -86,8 +77,6 @@ struct HomeSheetList: View {
                                     RouteRow(route: route)
                                 }
                                 .tint(.primary)
-                                // VoiceOver reads the full phrase; Voice
-                                // Control can target the short forms.
                                 .accessibilityLabel(route.spokenDescription)
                                 .accessibilityHint("Opens the route's stops and live vehicles")
                                 .accessibilityInputLabels([
@@ -106,7 +95,6 @@ struct HomeSheetList: View {
         }
         .navigationTitle(Text("Föli"))
         .navigationBarTitleDisplayMode(.inline)
-        // A filter change re-scopes the list; collapse any expansion.
         .onChange(of: searchFilter) { _, _ in
             showsAllNearbyStops = false
         }
@@ -114,10 +102,7 @@ struct HomeSheetList: View {
             if showsFilterMenu {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        // Inline Picker, not bare Buttons: a Picker in a Menu
-                        // nests as a submenu UNLESS `.inline` — which instead
-                        // renders flat and checkmarks (and announces as
-                        // selected) the active option natively.
+                        // `.inline` keeps the Picker flat; otherwise it nests as a submenu.
                         Section("Show stops within") {
                             Picker("Distance", selection: $searchFilter) {
                                 Label("Any distance", systemImage: "infinity")
@@ -150,18 +135,16 @@ struct HomeSheetList: View {
         return stops.matching(search).map { StopWithDistance($0) }
     }
 
-    /// Rendered rows: nearby is capped at `nearbyLimit` until expanded; search is uncapped.
+    /// Nearby is capped until expanded; search is uncapped.
     private var visibleStopRows: [StopWithDistance] {
         guard !isSearching else { return stopRows }
         return showsAllNearbyStops ? stopRows : Array(stopRows.prefix(Self.nearbyLimit))
     }
 
-    /// True when the idle list has more than the cap and isn't expanded.
     private var showsNearbyDisclosure: Bool {
         !isSearching && !showsAllNearbyStops && stopRows.count > Self.nearbyLimit
     }
 
-    /// All (line-sorted) routes when idle, matches when searching.
     private var routeRows: [Foli.Route] {
         let sorted = routes.sortedByLine()
         guard isSearching else { return sorted }
@@ -169,23 +152,18 @@ struct HomeSheetList: View {
         return sorted.matching(search)
     }
 
-    /// Full-sheet empty state fires only for a search with no matches; idle always
-    /// renders the list.
+    /// Only a search with no matches is empty; idle always shows the list.
     private var isListEmpty: Bool { isSearching && stopRows.isEmpty && routeRows.isEmpty }
 
-    /// Search shows the stops section only with matches; idle always shows it.
     private var showsStopsSection: Bool { isSearching ? !stopRows.isEmpty : true }
 
-    /// LocalizedStringKey (not String) so `Text` looks the keys up instead
-    /// of rendering them verbatim.
+    /// LocalizedStringKey so `Text` localizes instead of showing the key.
     private var stopSectionTitle: LocalizedStringKey { isSearching ? "Stops" : "Nearby Stops" }
 
-    /// The proximity filter is meaningful only in the idle list with a location.
     private var showsFilterMenu: Bool { isLocationAuthorized && !isSearching }
 
     // MARK: - Empty / disclosure states
 
-    /// Full-sheet empty state (see `isListEmpty`).
     @ViewBuilder
     private var emptyState: some View {
         if search.isEmpty {
@@ -195,7 +173,6 @@ struct HomeSheetList: View {
         }
     }
 
-    /// Inline message when the idle stops section is empty; discloses why and offers recovery.
     @ViewBuilder
     private var stopsDisclosure: some View {
         if !isLocationAuthorized {
@@ -224,8 +201,7 @@ struct HomeSheetList: View {
         }
     }
 
-    /// A message with a trailing action button; stacks vertically at
-    /// accessibility sizes (like the rows), so the message keeps full width.
+    /// Stacks at accessibility sizes.
     @ViewBuilder
     private func adaptiveRow<Message: View, Action: View>(
         @ViewBuilder _ message: () -> Message,
@@ -252,8 +228,7 @@ struct HomeSheetList: View {
         @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
         var body: some View {
-            // Accessibility sizes stack the row vertically — side by side, the
-            // columns starve each other's width and names break mid-word.
+            // Stacked at accessibility sizes; side by side, names break mid-word.
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
@@ -274,7 +249,6 @@ struct HomeSheetList: View {
             }
         }
 
-        /// The stop's short code — metadata, not a second title.
         private var code: some View {
             Text(stopWithDistance.stop.id)
                 .font(.subheadline)

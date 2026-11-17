@@ -23,13 +23,12 @@ struct StopWithDistance: Identifiable, Equatable {
         self.distance = distance
     }
 
-    /// Distance for display, or `nil` when unset (e.g. search results).
     var distanceText: String? {
         guard let distance else { return nil }
         return distance.rounded().formattedDistance
     }
 
-    /// Row label for screen readers; distance included when known.
+    /// VoiceOver row label.
     var spokenDescription: String {
         if let distanceText {
             return String(localized: "Stop ID \(stop.id), \(stop.name), \(distanceText) away")

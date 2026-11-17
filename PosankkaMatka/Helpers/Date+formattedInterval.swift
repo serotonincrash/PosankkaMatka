@@ -7,8 +7,7 @@
 
 import Foundation
 extension Date {
-    /// "Now" (under half a minute out), "N min" / "N min ago", or "HH:mm" an
-    /// hour or more out.
+    /// "Now", "N min", "N min ago", or "HH:mm" an hour or more out.
     func formattedInterval(to date: Date) -> String {
         let interval = timeIntervalSince(date)
         let minutes = Int((interval / 60).rounded())
@@ -21,8 +20,6 @@ extension Date {
         }
     }
 
-    /// Created once — `DateFormatter` allocation is expensive enough to matter
-    /// per-row.
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"

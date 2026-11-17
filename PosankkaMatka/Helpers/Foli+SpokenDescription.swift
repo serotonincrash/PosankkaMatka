@@ -9,7 +9,7 @@ import Foundation
 import FoliBusUI
 
 extension Foli.Route {
-    /// Row label for screen readers ("Route 15, Kauppatori–Länsikeskus").
+    /// VoiceOver row label.
     var spokenDescription: String {
         String(localized: "Route \(shortName), \(longName)")
     }

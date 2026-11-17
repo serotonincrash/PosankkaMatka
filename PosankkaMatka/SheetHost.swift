@@ -10,51 +10,35 @@ import Observation
 import FoliBusUI
 import PosankkaCore
 
-/// Shared sheet detents, owned by `HomeView` and bound only here, so per-drag
-/// writes re-evaluate these trivial views — never `HomeView`/the Map.
+/// Sheet detents, bound only in `SheetHost` so drags don't re-render the map.
 @MainActor
 @Observable
 final class SheetModel {
-    /// The peek detent. Inline titles leave the peek at the pre-summary
-    /// height for now; it gets re-measured once a summary line exists.
     static let peek = PresentationDetent.height(110)
-    /// Detent of the master lists sheet.
     var listDetent: PresentationDetent = .medium
-    /// Detent of the detail card (stop or route content).
     var cardDetent: PresentationDetent = .medium
-    /// Set while a programmatic cardDetent change should NOT trigger the
-    /// detent reframe — the writer (stop selection) frames synchronously
-    /// itself. Consumed by SheetHost's change handler.
+    /// Set before a programmatic `cardDetent` change whose writer frames the
+    /// map itself, so the change handler skips its reframe.
     var suppressDetentReframe = false
 }
 
-/// Hosts the app's two sheets as siblings (never nested), isolated from the
-/// map so detent drags invalidate only these views. Maps-style swap: the
-/// master lists and ONE detail card exchange as whole sheets; within the card,
-/// stop ⇄ route are content swaps — re-presenting mid-dismiss comes up with
-/// default config, and a single morphing sheet flashed titles mid-swap.
-/// Neither sheet is swipe-dismissable: a downward drag always collapses, and
-/// the card's close button exits to the lists.
+/// The lists sheet and the detail card, as sibling sheets. Stop and route
+/// swap as content inside one card: re-presenting mid-dismiss comes up with
+/// default config. Neither sheet swipe-dismisses; the card has a close button.
 struct SheetHost: View {
-    /// What the card shows; changed only through the bindings and `onClose`.
     let selection: Selection
-    /// Selection bindings for the lists; their setters run HomeView's transitions.
+    /// Setters run `HomeView`'s selection transitions.
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
-    /// Shared detents, bound to the sheets.
     @Bindable var sheetModel: SheetModel
-    /// The card's close button: exits to the lists from however deep.
     let onClose: () -> Void
-    /// Detent-reframe callback, fired from here so per-drag detent reads stay
-    /// out of `HomeView.body` (which would re-diff the Map on every write).
     let onCardDetentChange: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            // Master lists: up only when no card is; returns at its last detent.
             Color.clear
-                .allowsHitTesting(false)   // never intercept taps meant for the map
+                .allowsHitTesting(false)
                 .sheet(isPresented: masterPresented) {
                     NavigationStack {
                         ListStopsView(selectedStopID: $selectedStopID, selectedRoute: $selectedRoute)
@@ -64,15 +48,13 @@ struct SheetHost: View {
                     .interactiveDismissDisabled()
                 }
 
-            // The detail card: stop content wins over route; selections while
-            // the card is up swap in place — no dismiss/present pair to race.
             Color.clear
                 .allowsHitTesting(false)
                 .sheet(isPresented: cardPresented) {
                     cardChrome {
                         if let stop = selection.stop {
                             StopView(stop: stop)
-                                // Fresh identity per stop → arrivals re-fetch.
+                                // New identity per stop, so arrivals re-fetch.
                                 .id(stop.id)
                                 .transition(cardTransition)
                         } else if let route = selection.route {
@@ -82,8 +64,6 @@ struct SheetHost: View {
                     }
                 }
                 .onChange(of: sheetModel.cardDetent) { _, _ in
-                    // Programmatic resets (card swaps) frame synchronously at
-                    // the selection site; only user drags reframe.
                     if sheetModel.suppressDetentReframe {
                         sheetModel.suppressDetentReframe = false
                     } else {
@@ -93,8 +73,6 @@ struct SheetHost: View {
         }
     }
 
-    /// Card chrome: native titles, detents, close button. Swipe-down is
-    /// disabled — a down-drag always collapses; the button exits to the lists.
     private func cardChrome(@ViewBuilder _ content: () -> some View) -> some View {
         NavigationStack {
             ZStack {
@@ -113,8 +91,6 @@ struct SheetHost: View {
         .interactiveDismissDisabled()
     }
 
-    /// The card content replacement: the new detail slides up over the old
-    /// one — a plain fade under Reduce Motion.
     private var cardTransition: AnyTransition {
         .asymmetric(
             insertion: reduceMotion ? .opacity : .move(edge: .bottom),
@@ -122,8 +98,7 @@ struct SheetHost: View {
         )
     }
 
-    /// Master shows exactly when no card is. No-op setter: the sheet can't be
-    /// interactively dismissed; dismissal flows through the selection state.
+    /// No-op setters: the sheets can't be dismissed interactively.
     private var masterPresented: Binding<Bool> {
         Binding(
             get: { selection.isEmpty },
@@ -131,7 +106,6 @@ struct SheetHost: View {
         )
     }
 
-    /// Card shows while anything is selected; same no-op-setter reasoning.
     private var cardPresented: Binding<Bool> {
         Binding(
             get: { !selection.isEmpty },

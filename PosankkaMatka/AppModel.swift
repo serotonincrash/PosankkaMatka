@@ -8,8 +8,7 @@ import Observation
 import FoliBusUI
 import PosankkaCore
 
-/// App-wide state: the shared data stores, the card selection, and the
-/// loading and polling that follow from it. Map framing stays in `HomeView`.
+/// Shared stores, the card selection and its loading/polling. Map framing lives in `HomeView`.
 @MainActor
 @Observable
 final class AppModel {

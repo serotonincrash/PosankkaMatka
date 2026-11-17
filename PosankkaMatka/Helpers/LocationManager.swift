@@ -10,13 +10,10 @@ import CoreLocation
 
 @Observable
 final class LocationManager: NSObject, CLLocationManagerDelegate  {
-    /// The most recent coordinate (observable; `distanceFilter` bounds updates).
     var currentLocation: CLLocationCoordinate2D?
 
-    /// Authorization mirrored into observable state by the delegate.
     private(set) var isAuthorized: Bool = false
 
-    /// Not observable — reading its mutable state from `body` registers spurious dependencies.
     @ObservationIgnored
     var locationManager: CLLocationManager = CLLocationManager()
 
@@ -26,12 +23,9 @@ final class LocationManager: NSObject, CLLocationManagerDelegate  {
         self.locationManager.activityType = .otherNavigation
         self.locationManager.distanceFilter = 5
         self.locationManager.requestWhenInUseAuthorization()
-        // Seed from the current status; the delegate keeps it current afterward.
         refreshAuthorization()
     }
 
-    /// Recomputes `isAuthorized` from the system status and starts or stops
-    /// location updates to match.
     private func refreshAuthorization() {
         switch locationManager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:

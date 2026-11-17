@@ -10,32 +10,25 @@ import MapKit
 import FoliBusUI
 import PosankkaCore
 
-/// The map surface: user location, viewport stop markers, the selected route's
-/// line/pins/stops, and live vehicle pucks.
+/// The map: user location, stop markers, the selected route, and live vehicles.
 struct MapView: View {
     @Binding var camera: MapCameraPosition
     @Binding var selectedStopID: Foli.Stop.ID?
-    /// Associates the map with the scoped compass in HomeView's controls
-    /// overlay (bound there via `.mapScope`).
+    /// Ties the map to the scoped compass in HomeView's overlay.
     var mapScope: Namespace.ID
     let displayedStops: [Foli.Stop]
-    /// Stop IDs served by a boat route — rendered with a ferry glyph.
     let boatStopIDs: Set<Foli.Stop.ID>
-    /// The selected route direction, or nil when none.
     let direction: RouteDirection?
-    /// The selected route's color, used for the polyline, stop dots, and markers.
     let routeColor: Color
-    /// Zoomed past the threshold: route stops render as tappable markers, else dots.
     let isZoomedIn: Bool
-    /// Viewport markers show only when false (they'd leak through while a route loads).
+    /// Viewport markers hide while a route is selected (they'd show through during load).
     let routeIsSelected: Bool
-    /// Live vehicles (SIRI VM) with their interpolated draw positions, shown
-    /// while a detail card is open.
+    /// Vehicles with interpolated positions.
     let vehicles: [VehicleTracker.Position]
-    /// The route per line number (SIRI `lineRef` == short name), for pin colors.
+    /// Route per line number (`lineRef` == short name), for pin colors.
     let lineRoutes: [String: Foli.Route]
 
-    /// Zoom bounds (camera distance in meters): street level to region level.
+    /// Camera distance bounds in meters.
     private static let minimumDistance: Double = 500
     private static let maximumDistance: Double = 50_000
 
@@ -49,9 +42,7 @@ struct MapView: View {
             UserAnnotation()
             mapContent
         }
-        // Scale only: the compass + locate button live in HomeView's overlay
-        // (`.mapControls` hosts no custom views, and its locate button
-        // centers the user behind the sheets).
+        // Scale only: `.mapControls` can't host the compass, and its locate button centers behind the sheets.
         .mapControls {
             MapScaleView()
         }
@@ -65,7 +56,6 @@ struct MapView: View {
                     .stroke(routeColor,
                             style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
-            // Route stops: dots at overview zoom, tappable markers when zoomed in.
             if isZoomedIn {
                 ForEach(direction.stops) { stop in
                     if let coordinate = stop.location?.toCLCoordinate() {
@@ -75,7 +65,7 @@ struct MapView: View {
                     }
                 }
             } else {
-                // Offset identity: untagged, so the dots stay non-selectable.
+                // Untagged (offset identity) so dots aren't selectable.
                 ForEach(Array(direction.stops.enumerated()), id: \.offset) { _, stop in
                     if let coordinate = stop.location?.toCLCoordinate() {
                         Annotation(stop.name, coordinate: coordinate) {
@@ -98,11 +88,10 @@ struct MapView: View {
                 .annotationTitles(.hidden)
             }
         }
-        // Viewport markers only when no route is selected.
         if !routeIsSelected {
             ForEach(displayedStops) { stop in
                 if let coordinate = stop.location?.toCLCoordinate() {
-                    // System Marker: MapKit's label decluttering + selected name.
+                    // System Marker for MapKit's label decluttering.
                     // TODO: model Föli's real stop signage instead of bus/boat glyphs.
                     Marker(stop.name, systemImage: markerSystemImage(for: stop), coordinate: coordinate)
                         .tint(boatStopIDs.contains(stop.id) ? .blue : .red)
@@ -110,8 +99,7 @@ struct MapView: View {
                 }
             }
         }
-        // Vehicles last, on top; untagged (non-selectable). The store
-        // interpolates positions between polls, so these arrive pre-blended.
+        // Untagged so they aren't selectable; positions arrive pre-interpolated.
         ForEach(vehicles) { displayed in
             Annotation(displayed.vehicle.publishedLineName, coordinate: displayed.coordinate.toCLCoordinate()) {
                 vehiclePin(for: displayed.vehicle)
@@ -120,12 +108,10 @@ struct MapView: View {
         }
     }
 
-    /// Marker glyph per stop: boat stops get a ferry glyph, everything else a bus.
     private func markerSystemImage(for stop: Foli.Stop) -> String {
         boatStopIDs.contains(stop.id) ? "ferry.fill" : "bus.fill"
     }
 
-    /// A route start/end pin glyph in the route color, distinct from stop markers.
     private func routeEndpointPin(systemImage: String) -> some View {
         Image(systemName: systemImage)
             .font(.headline)
@@ -136,7 +122,6 @@ struct MapView: View {
             .shadow(radius: 2)
     }
 
-    /// Route-colored dot; the zoomed-in markers are the tappable form.
     private var routeStopDot: some View {
         Circle()
             .fill(routeColor)
@@ -144,13 +129,10 @@ struct MapView: View {
             .overlay(Circle().stroke(.white, lineWidth: 2))
     }
 
-    /// Shared monospaced puck font, so the hidden reference and visible text
-    /// measure identically (same trick as `RouteBadge`).
+    /// Shared so the hidden reference and visible text measure the same.
     private var puckFont: Font { .caption2.weight(.bold).monospaced() }
 
-    /// Vehicle puck: the `RouteBadge` idiom — hidden "000" reserves a
-    /// three-digit width, longer codes (e.g. "Lautta") expand naturally.
-    /// Stroke + shadow lift it off the line.
+    /// Same idiom as `RouteBadge`.
     private func vehiclePin(for vehicle: Foli.VehicleLocation) -> some View {
         let route = lineRoutes[vehicle.lineRef]
         return ZStack {

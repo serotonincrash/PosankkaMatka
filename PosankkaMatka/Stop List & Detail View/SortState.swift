@@ -11,6 +11,6 @@ enum SortState: Hashable, Codable {
     /// Only stops within this many meters of the user.
     case proximity(Double)
     
-    /// No distance cutoff — every stop, nearest first.
+    /// No distance cutoff; every stop, nearest first.
     case none
 }
