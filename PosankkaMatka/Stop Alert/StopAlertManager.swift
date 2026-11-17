@@ -11,12 +11,13 @@ import UserNotifications
 import FoliBusUI
 import PosankkaCore
 
-/// The one active "Alert Me Here": a geofence on the rider's own location
-/// around the stop, plus a countdown Live Activity. Either ending ends both;
-/// setting a new alert replaces the old.
+/// The one active "Alert Me Here": a background location session that shows
+/// the rider's distance to the stop and whether the bus is about to reach it.
+/// It polls the stop's small arrivals feed, notifies per `StopAlertPolicy`,
+/// and drives a Live Activity. Setting a new alert replaces the old.
 ///
-/// Call `resume()` at launch: a geofence hit can relaunch the app in the
-/// background, and only a live `CLMonitor` with the same name receives it.
+/// Needs only When-In-Use: the session starts in the foreground and keeps
+/// running in the background (location background mode, blue indicator).
 @MainActor
 @Observable
 final class StopAlertManager {
@@ -26,34 +27,43 @@ final class StopAlertManager {
         let latitude: Double
         let longitude: Double
         var state: StopAlertAttributes.ContentState
+        var sessionStart: Date
+        var sent: Set<StopAlertPolicy.Alert> = []
     }
 
     private(set) var active: ActiveAlert?
 
-    /// Whether the geofence can fire with the app closed. False after the
-    /// rider declined Always; the alert then only works while the app runs.
-    var canAlertInBackground: Bool { locationManager.authorizationStatus == .authorizedAlways }
     var isLocationDenied: Bool {
-        [.denied, .restricted].contains(locationManager.authorizationStatus)
+        [.denied, .restricted].contains(authorization.authorizationStatus)
     }
 
-    private static let radius: CLLocationDistance = 350
+    private static let pollInterval: Duration = .seconds(30)
+    /// A fix older than this says nothing about where the rider is now.
+    private static let fixMaxAge: TimeInterval = 120
+    /// Consecutive misses before the trip counts as gone from the stop feed.
+    private static let missesToConfirm = 2
+    private static let geofenceRadius: CLLocationDistance = 350
     private static let monitorName = "StopAlert"
     private static let conditionID = "stop"
-    private static let notificationID = "stopAlert"
     private static let defaultsKey = "StopAlertManager.active"
-    /// A resumed alert this far past its ETA is abandoned.
-    private static let expiry: TimeInterval = 30 * 60
 
-    @ObservationIgnored private let locationManager = CLLocationManager()
+    @ObservationIgnored private let client: FoliClient
+    @ObservationIgnored private let authorization = CLLocationManager()
     @ObservationIgnored private let notificationPresenter = NotificationPresenter()
+    @ObservationIgnored private var feed: LocationFeed?
+    @ObservationIgnored private var serviceSession: CLServiceSession?
+    @ObservationIgnored private var backgroundSession: CLBackgroundActivitySession?
     @ObservationIgnored private var monitor: CLMonitor?
-    /// Holding this keeps the Always authorization goal (and the prompt) alive.
-    @ObservationIgnored private var session: CLServiceSession?
     @ObservationIgnored private var monitorTask: Task<Void, Never>?
+    @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var activityTask: Task<Void, Never>?
+    @ObservationIgnored private var lastFix: CLLocation?
+    @ObservationIgnored private var seenInFeed = false
+    @ObservationIgnored private var feedMisses = 0
+    @ObservationIgnored private var lastPushed: (state: StopAlertAttributes.ContentState, at: Date)?
 
-    init() {
+    init(client: FoliClient) {
+        self.client = client
         UNUserNotificationCenter.current().delegate = notificationPresenter
     }
 
@@ -65,8 +75,8 @@ final class StopAlertManager {
 
     // MARK: - Lifecycle
 
-    /// Starts an alert, replacing any active one. First use prompts for
-    /// notifications and Always location.
+    /// Starts an alert, replacing any active one. Must run in the foreground:
+    /// that's when a When-In-Use session may begin.
     func setAlert(
         _ attributes: StopAlertAttributes,
         at coordinate: CLLocationCoordinate2D,
@@ -77,19 +87,20 @@ final class StopAlertManager {
             attributes: attributes,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
-            state: state
+            state: state,
+            sessionStart: .now
         )
         active = alert
         persist()
 
         _ = try? await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound])
-        session = CLServiceSession(authorization: .always)
-        await startMonitoring(alert, fresh: true)
+        await startSession(alert, freshGeofence: true)
         startActivity(alert)
     }
 
-    /// Feeds the latest estimate; call on each foreground poll.
+    /// Feeds the vehicle card's estimate while it's on screen; fresher than
+    /// the 30 s stop-feed poll.
     func update(eta: Date, nextStopName: String?, delaySeconds: Int?, at now: Date = .now) async {
         guard var alert = active, !alert.state.hasArrived else { return }
         alert.state.eta = eta
@@ -97,21 +108,18 @@ final class StopAlertManager {
         alert.state.nextStopName = nextStopName
         alert.state.delaySeconds = delaySeconds
         active = alert
-        persist()
-        for activity in Activity<StopAlertAttributes>.activities {
-            await activity.update(ActivityContent(state: alert.state, staleDate: alert.state.staleDate))
-        }
+        await evaluate()
     }
 
-    /// Ends the alert, its geofence and its Live Activity.
+    /// Ends the session, geofence and Live Activity.
     func cancel() async {
         await tearDown()
     }
 
-    /// Reattaches to a persisted alert after launch, or cleans up leftovers.
+    /// Reattaches to a persisted session after a relaunch, or cleans up.
     func resume(now: Date = .now) async {
         guard let alert = loadPersisted(),
-              now.timeIntervalSince(alert.state.eta) < Self.expiry else {
+              now.timeIntervalSince(alert.sessionStart) < StopAlertPolicy.maxDuration else {
             await tearDown()
             return
         }
@@ -122,22 +130,122 @@ final class StopAlertManager {
             return
         }
         active = alert
-        session = CLServiceSession(authorization: .always)
-        await startMonitoring(alert, fresh: false)
+        // A relaunched app must recreate its background session promptly.
+        await startSession(alert, freshGeofence: false)
         if let activity { observe(activity) }
     }
 
-    // MARK: - Geofence
+    // MARK: - Session
 
-    private func startMonitoring(_ alert: ActiveAlert, fresh: Bool) async {
+    private func startSession(_ alert: ActiveAlert, freshGeofence: Bool) async {
+        serviceSession = CLServiceSession(authorization: .whenInUse)
+        backgroundSession = CLBackgroundActivitySession()
+        let feed = LocationFeed { [weak self] location in
+            self?.lastFix = location
+            Task { await self?.evaluate() }
+        }
+        self.feed = feed
+        feed.start()
+        seenInFeed = false
+        feedMisses = 0
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.poll()
+                try? await Task.sleep(for: Self.pollInterval)
+            }
+        }
+        await startGeofence(alert, fresh: freshGeofence)
+    }
+
+    /// The stop's own feed (~10 KB), not the whole-network vehicle feed.
+    private func poll() async {
+        guard let stopID = active?.attributes.stopID else { return }
+        guard let arrivals = try? await client.fetchArrivals(for: stopID),
+              var alert = active, alert.attributes.stopID == stopID else { return }
+        if let arrival = arrivals.arrival(for: alert.attributes.trip) {
+            seenInFeed = true
+            feedMisses = 0
+            alert.state.eta = arrival.expectedArrivalDate
+            alert.state.updatedAt = .now
+            if let delay = arrival.delay { alert.state.delaySeconds = delay }
+            active = alert
+        } else if seenInFeed {
+            feedMisses += 1
+        }
+        await evaluate()
+    }
+
+    private func evaluate(now: Date = .now) async {
+        guard var alert = active else { return }
+        let fix = lastFix.flatMap { now.timeIntervalSince($0.timestamp) < Self.fixMaxAge ? $0 : nil }
+        let distance = fix?.distance(from: CLLocation(latitude: alert.latitude, longitude: alert.longitude))
+        alert.state.distanceMeters = distance
+        alert.state.walkingMinutes = distance.map {
+            Int((StopAlertPolicy.walkingTime(forDistance: $0) / 60).rounded(.up))
+        }
+        let outcome = StopAlertPolicy.evaluate(.init(
+            now: now,
+            sessionStart: alert.sessionStart,
+            busETA: alert.state.eta,
+            busMissingFromFeed: feedMisses >= Self.missesToConfirm,
+            distance: distance,
+            speed: fix.flatMap { $0.speed >= 0 ? $0.speed : nil },
+            sent: alert.sent
+        ))
+        if let kind = outcome.notify {
+            alert.sent.insert(kind)
+            await notify(kind, alert: alert)
+        }
+        active = alert
+        persist()
+        if let end = outcome.end {
+            alert.state.hasArrived = end == .arrived
+            await tearDown(finalState: alert.state, lingering: end == .arrived ? 5 * 60 : 60)
+        } else {
+            await pushActivity(alert.state, now: now)
+        }
+    }
+
+    private func notify(_ kind: StopAlertPolicy.Alert, alert: ActiveAlert) async {
+        let line = alert.attributes.lineName
+        let stop = alert.attributes.stopName
+        let minutes = max(0, Int((alert.state.eta.timeIntervalSinceNow / 60).rounded()))
+        let content = UNMutableNotificationContent()
+        switch kind {
+        case .leaveNow:
+            content.title = String(localized: "Leave now for \(stop)")
+            if let walk = alert.state.walkingMinutes {
+                content.body = String(localized: "Bus \(line) arrives in \(minutes) min; it's about a \(walk) min walk.")
+            } else {
+                content.body = String(localized: "Bus \(line) arrives in \(minutes) min.")
+            }
+        case .busArriving:
+            content.title = String(localized: "Bus \(line) is arriving")
+            content.body = String(localized: "At \(stop) in about \(minutes) min.")
+        case .stopIsNext:
+            content.title = String(localized: "Your stop is next")
+            content.body = String(localized: "\(stop) is coming up on bus \(line).")
+        }
+        content.sound = .default
+        // Needs the Time Sensitive Notifications capability; otherwise plain.
+        content.interruptionLevel = .timeSensitive
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "stopAlert.\(kind.rawValue)", content: content, trigger: nil)
+        )
+    }
+
+    // MARK: - Geofence fallback
+
+    /// Only fires with the session dead (force-quit relaunch, which needs
+    /// Always, granted elsewhere or not at all); a live session decides itself.
+    private func startGeofence(_ alert: ActiveAlert, fresh: Bool) async {
         let monitor = await monitor()
         let existing = await monitor.record(for: Self.conditionID)
         if fresh || existing == nil {
             let condition = CLMonitor.CircularGeographicCondition(
                 center: CLLocationCoordinate2D(latitude: alert.latitude, longitude: alert.longitude),
-                radius: Self.radius
+                radius: Self.geofenceRadius
             )
-            // Already inside counts as arriving.
             await monitor.add(condition, identifier: Self.conditionID, assuming: .unsatisfied)
         }
         monitorTask?.cancel()
@@ -145,11 +253,26 @@ final class StopAlertManager {
             do {
                 for try await event in await monitor.events
                 where event.identifier == Self.conditionID && event.state == .satisfied {
-                    await self?.arrive()
-                    return
+                    await self?.geofenceEntered()
                 }
             } catch {}
         }
+    }
+
+    private func geofenceEntered() async {
+        guard var alert = active, !alert.sent.contains(.stopIsNext) else { return }
+        if let lastFix, Date().timeIntervalSince(lastFix.timestamp) < Self.fixMaxAge { return }
+        alert.sent.insert(.stopIsNext)
+        active = alert
+        persist()
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Approaching \(alert.attributes.stopName)")
+        content.body = String(localized: "You're near your stop for bus \(alert.attributes.lineName).")
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "stopAlert.geofence", content: content, trigger: nil)
+        )
     }
 
     /// One monitor per name may exist, so it's created once and reused.
@@ -158,21 +281,6 @@ final class StopAlertManager {
         let created = await CLMonitor(Self.monitorName)
         monitor = created
         return created
-    }
-
-    private func arrive() async {
-        guard var alert = active else { return }
-        alert.state.hasArrived = true
-        let content = UNMutableNotificationContent()
-        content.title = String(localized: "Approaching \(alert.attributes.stopName)")
-        content.body = String(localized: "Your stop on line \(alert.attributes.lineName) is coming up.")
-        content.sound = .default
-        // Needs the Time Sensitive Notifications capability; otherwise plain.
-        content.interruptionLevel = .timeSensitive
-        try? await UNUserNotificationCenter.current().add(
-            UNNotificationRequest(identifier: Self.notificationID, content: content, trigger: nil)
-        )
-        await tearDown(finalState: alert.state)
     }
 
     // MARK: - Live Activity
@@ -185,13 +293,33 @@ final class StopAlertManager {
                 content: ActivityContent(state: alert.state, staleDate: alert.state.staleDate),
                 pushType: nil
             )
+            lastPushed = (alert.state, .now)
             observe(activity)
         } catch {
-            // The geofence still works without the countdown.
+            // Notifications still work without it.
         }
     }
 
-    /// The rider dismissing the activity cancels the geofence too.
+    /// Skips updates that wouldn't change what's on screen.
+    private func pushActivity(_ state: StopAlertAttributes.ContentState, now: Date) async {
+        if let lastPushed, now.timeIntervalSince(lastPushed.at) < 60,
+           lastPushed.state.eta == state.eta,
+           lastPushed.state.walkingMinutes == state.walkingMinutes,
+           lastPushed.state.nextStopName == state.nextStopName,
+           Self.distanceBucket(lastPushed.state.distanceMeters) == Self.distanceBucket(state.distanceMeters) {
+            return
+        }
+        lastPushed = (state, now)
+        for activity in Activity<StopAlertAttributes>.activities {
+            await activity.update(ActivityContent(state: state, staleDate: state.staleDate))
+        }
+    }
+
+    private static func distanceBucket(_ meters: Double?) -> Int? {
+        meters.map { Int($0 / 50) }
+    }
+
+    /// The rider dismissing the activity ends the session too.
     private func observe(_ activity: Activity<StopAlertAttributes>) {
         activityTask?.cancel()
         activityTask = Task { [weak self] in
@@ -205,25 +333,36 @@ final class StopAlertManager {
 
     // MARK: - Teardown
 
-    /// `finalState` leaves the ended activity on screen briefly showing it.
-    private func tearDown(finalState: StopAlertAttributes.ContentState? = nil) async {
+    /// `finalState` leaves the ended activity on screen for `lingering` seconds.
+    private func tearDown(
+        finalState: StopAlertAttributes.ContentState? = nil,
+        lingering: TimeInterval = 0
+    ) async {
         // Cancel observers first so ending the activity doesn't re-enter.
         activityTask?.cancel()
         activityTask = nil
         monitorTask?.cancel()
         monitorTask = nil
+        pollTask?.cancel()
+        pollTask = nil
+        feed?.stop()
+        feed = nil
+        lastFix = nil
+        lastPushed = nil
         active = nil
         persist()
 
         if let monitor { await monitor.remove(Self.conditionID) }
-        session?.invalidate()
-        session = nil
+        backgroundSession?.invalidate()
+        backgroundSession = nil
+        serviceSession?.invalidate()
+        serviceSession = nil
 
         for activity in Activity<StopAlertAttributes>.activities {
             if let finalState {
                 await activity.end(
                     ActivityContent(state: finalState, staleDate: nil),
-                    dismissalPolicy: .after(.now.addingTimeInterval(5 * 60))
+                    dismissalPolicy: .after(.now.addingTimeInterval(lingering))
                 )
             } else {
                 await activity.end(nil, dismissalPolicy: .immediate)
@@ -248,6 +387,36 @@ final class StopAlertManager {
     }
 }
 
+/// Continuous updates that don't pause while the rider stands still:
+/// `CLLocationUpdate.liveUpdates` pauses (and may suspend the app) when
+/// stationary, which would stop the poll while someone waits at home.
+@MainActor
+private final class LocationFeed: NSObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    private let onUpdate: @MainActor (CLLocation) -> Void
+
+    init(onUpdate: @escaping @MainActor (CLLocation) -> Void) {
+        self.onUpdate = onUpdate
+        super.init()
+        manager.delegate = self
+        manager.activityType = .otherNavigation
+        manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        manager.distanceFilter = 10
+        manager.pausesLocationUpdatesAutomatically = false
+        manager.allowsBackgroundLocationUpdates = true
+        manager.showsBackgroundLocationIndicator = true
+    }
+
+    func start() { manager.startUpdatingLocation() }
+    func stop() { manager.stopUpdatingLocation() }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        // Delegate calls arrive on the main thread, where the manager was made.
+        MainActor.assumeIsolated { onUpdate(location) }
+    }
+}
+
 extension StopAlertAttributes {
     /// Builds the attributes from the app's models.
     init(
@@ -269,6 +438,10 @@ extension StopAlertAttributes {
             lineRef: trip.lineRef,
             originAimedDepartureTime: trip.originAimedDepartureTime
         )
+    }
+
+    var trip: TripKey {
+        TripKey(vehicleRef: vehicleRef, lineRef: lineRef, originAimedDepartureTime: originAimedDepartureTime)
     }
 }
 

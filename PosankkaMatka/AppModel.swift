@@ -18,7 +18,7 @@ final class AppModel {
     let routes = ResourceStore<[Foli.Route]>()
     let routeDetail: RouteDetailStore
     let vehicles: VehicleStore
-    let stopAlert = StopAlertManager()
+    let stopAlert: StopAlertManager
 
     private(set) var selection = Selection()
     /// Stops served by a ferry route; drawn with a ferry glyph.
@@ -35,6 +35,7 @@ final class AppModel {
         self.client = client
         routeDetail = RouteDetailStore(client: client)
         vehicles = VehicleStore(client: client)
+        stopAlert = StopAlertManager(client: client)
     }
 
     var allStops: [Foli.Stop] { stops.state.value ?? [] }

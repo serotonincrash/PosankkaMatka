@@ -174,10 +174,17 @@ private struct VehicleCardContent: View {
         } label: {
             HStack(spacing: 12) {
                 RailGutter(slice: slice, color: routeColor)
-                StopRowLabel(stopID: call.stopID, name: call.name)
-                    .foregroundStyle(call.state == .passed ? .secondary : .primary)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    StopRowLabel(stopID: call.stopID, name: call.name)
+                        .foregroundStyle(call.state == .passed ? .secondary : .primary)
+                    if isAlerting, let distance = alertDistanceText {
+                        Text(distance)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 if isAlerting {
                     Image(systemName: "bell.fill")
                         .foregroundStyle(routeColor)
@@ -234,7 +241,10 @@ private struct VehicleCardContent: View {
                 parts.append(time)
             }
         }
-        if isAlerting { parts.append(String(localized: "Alert set")) }
+        if isAlerting {
+            parts.append(String(localized: "Alert set"))
+            if let distance = alertDistanceText { parts.append(distance) }
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -305,11 +315,18 @@ private struct VehicleCardContent: View {
         let alert = model.stopAlert
         if let active = alert.active, active.attributes.vehicleRef == key.vehicleRef {
             if alert.isLocationDenied {
-                Text("Location access is off, so this alert can't fire. Turn it on in Settings.")
-            } else if !alert.canAlertInBackground {
-                Text("This alert works only while the app is open. Allow location access Always in Settings to be alerted in the background.")
+                Text("Location access is off, so the alert can't tell how far you are from \(active.attributes.stopName). Turn it on in Settings.")
+            } else {
+                Text("Tracking until the bus reaches \(active.attributes.stopName), using your location to tell you when to leave or get off. Ends after an hour.")
             }
         }
+    }
+
+    /// "600 m · 8 min walk" for the alerting stop, once there's a fix.
+    private var alertDistanceText: String? {
+        guard let state = model.stopAlert.active?.state, let meters = state.distanceMeters else { return nil }
+        guard let walk = state.walkingMinutes else { return meters.formattedDistance }
+        return String(localized: "\(meters.formattedDistance) · \(walk) min walk")
     }
 
     private struct AlertEstimate: Equatable {

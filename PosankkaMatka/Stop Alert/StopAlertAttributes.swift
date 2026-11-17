@@ -8,8 +8,8 @@
 import ActivityKit
 import Foundation
 
-/// A countdown to one bus reaching the stop the rider chose. No server
-/// pushes, so the state is only as fresh as the app's last foreground poll.
+/// One bus reaching the stop the rider chose, and how far the rider is from
+/// it. Updated by the app while its background location session runs.
 nonisolated struct StopAlertAttributes: ActivityAttributes, Hashable {
     nonisolated struct ContentState: Codable, Hashable, Sendable {
         /// Last-known expected arrival at the alert stop.
@@ -21,6 +21,10 @@ nonisolated struct StopAlertAttributes: ActivityAttributes, Hashable {
         var delaySeconds: Int?
         /// The rider's own location reached the stop.
         var hasArrived: Bool = false
+        /// Device to stop, straight line; nil without a fix.
+        var distanceMeters: Double?
+        /// Walk to the stop, with the street detour; nil without a fix.
+        var walkingMinutes: Int?
 
         /// The countdown no longer means much past the ETA, nor once the
         /// estimate has gone unrefreshed for a while.

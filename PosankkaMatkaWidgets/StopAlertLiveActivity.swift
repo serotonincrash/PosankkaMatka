@@ -65,7 +65,7 @@ private struct LockScreenView: View {
     }
 }
 
-/// Next stop and delay, or why the countdown can't be trusted.
+/// The rider's distance to the stop and delay, or why the countdown can't be trusted.
 private struct StatusLine: View {
     let context: ActivityViewContext<StopAlertAttributes>
 
@@ -75,6 +75,8 @@ private struct StatusLine: View {
                 Text("Your stop is coming up")
             } else if context.isStale {
                 Text("Updated \(context.state.updatedAt, style: .time) · open the app to refresh")
+            } else if let distance = distanceText {
+                distance + delayText
             } else if let next = context.state.nextStopName {
                 Text("Next: \(next)") + delayText
             } else {
@@ -84,6 +86,18 @@ private struct StatusLine: View {
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+
+    /// "You're 600 m away (8 min walk)".
+    private var distanceText: Text? {
+        guard let meters = context.state.distanceMeters else { return nil }
+        let distance = Measurement(value: meters, unit: UnitLength.meters)
+            .formatted(.measurement(width: .abbreviated, usage: .road))
+        if let walk = context.state.walkingMinutes {
+            return Text("You're \(distance) away (\(walk) min walk)")
+        }
+        return Text("You're \(distance) away")
     }
 
     private var delayText: Text {
@@ -147,6 +161,7 @@ private extension Color {
     StopAlertLiveActivity()
 } contentStates: {
     StopAlertAttributes.ContentState(eta: .now.addingTimeInterval(420), updatedAt: .now,
-                                     nextStopName: "Puolalanmäki", delaySeconds: 120)
+                                     nextStopName: "Puolalanmäki", delaySeconds: 120,
+                                     distanceMeters: 600, walkingMinutes: 10)
     StopAlertAttributes.ContentState(eta: .now, updatedAt: .now, hasArrived: true)
 }
