@@ -91,7 +91,7 @@ struct HomeSheetList: View {
                                 .accessibilityLabel(route.spokenDescription)
                                 .accessibilityHint("Opens the route's stops and live vehicles")
                                 .accessibilityInputLabels([
-                                    "Route \(route.shortName)",
+                                    String(localized: "Route \(route.shortName)"),
                                     route.longName
                                 ])
                             }

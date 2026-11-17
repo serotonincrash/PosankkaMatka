@@ -127,7 +127,7 @@ struct StopView: View {
         .onChange(of: arrivalsStore.lastError?.localizedDescription) { old, new in
             if old == nil, let new, arrivalsStore.state.value != nil {
                 UIAccessibility.post(notification: .announcement,
-                                     argument: "Refresh failed: \(new)")
+                                     argument: String(localized: "Refresh failed: \(new)"))
             }
         }
 
@@ -200,14 +200,14 @@ struct StopView: View {
 /// in the device locale) natively; an hour or more out reads better as clock
 /// time, and under a minute as "departing now".
 func spokenArrival(line: String, destination: String, departure: Date) -> String {
-    let head = "Line \(line) to \(destination)"
+    let head = String(localized: "Line \(line) to \(destination)")
     let interval = departure.timeIntervalSince(.now)
     let minutes = Int((interval / 60).rounded())
     if minutes >= 60 {
-        return "\(head), departing at \(departure.formatted(date: .omitted, time: .shortened))"
+        return String(localized: "\(head), departing at \(departure.formatted(date: .omitted, time: .shortened))")
     }
     if interval > 0, minutes == 0 {
-        return "\(head), departing now"
+        return String(localized: "\(head), departing now")
     }
     return "\(head), \(departure.formatted(.relative(presentation: .named)))"
 }

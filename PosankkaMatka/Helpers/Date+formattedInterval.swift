@@ -13,11 +13,11 @@ extension Date {
         let interval = timeIntervalSince(date)
         let minutes = Int((interval / 60).rounded())
         if interval <= 0 {
-            return "\(minutes) min ago"
+            return String(localized: "\(abs(minutes)) min ago")
         } else if minutes >= 60 {
             return Self.timeFormatter.string(from: self)
         } else {
-            return minutes == 0 ? "Now" : "\(minutes) min"
+            return minutes == 0 ? String(localized: "Now") : String(localized: "\(minutes) min")
         }
     }
 

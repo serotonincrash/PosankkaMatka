@@ -5,6 +5,7 @@
 //  Created by sero on 10/4/26.
 //
 
+import Foundation
 import FoliBusAPI
 
 struct StopWithDistance: Identifiable, Equatable {
@@ -31,8 +32,8 @@ struct StopWithDistance: Identifiable, Equatable {
     /// Row label for screen readers; distance included when known.
     var spokenDescription: String {
         if let distanceText {
-            return "Stop ID \(stop.id), \(stop.name), \(distanceText) away"
+            return String(localized: "Stop ID \(stop.id), \(stop.name), \(distanceText) away")
         }
-        return "Stop ID \(stop.id), \(stop.name)"
+        return String(localized: "Stop ID \(stop.id), \(stop.name)")
     }
 }
