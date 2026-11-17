@@ -74,7 +74,7 @@ private struct StatusLine: View {
             if context.state.hasArrived {
                 Text("Your stop is coming up")
             } else if context.isStale {
-                Text("Updated \(context.state.updatedAt, style: .time) · open the app to refresh")
+                Text("Last updated \(context.state.updatedAt, style: .time)")
             } else if let distance = distanceText {
                 distance + delayText
             } else if let next = context.state.nextStopName {
