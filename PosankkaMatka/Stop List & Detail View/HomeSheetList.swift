@@ -8,6 +8,7 @@
 import SwiftUI
 import UIKit
 import FoliBusUI
+import PosankkaCore
 
 /// The home-sheet list: "Nearby Stops" and "Routes". Tapping a row sets the shared
 /// selection the map reacts to.
@@ -146,12 +147,7 @@ struct HomeSheetList: View {
     private var stopRows: [StopWithDistance] {
         guard isSearching else { return nearbyStops }
         guard !search.isEmpty else { return [] }
-        return stops
-            .filter {
-                $0.name.localizedCaseInsensitiveContains(search)
-                    || ($0.code ?? "").localizedCaseInsensitiveContains(search)
-            }
-            .map { StopWithDistance($0) }
+        return stops.matching(search).map { StopWithDistance($0) }
     }
 
     /// Rendered rows: nearby is capped at `nearbyLimit` until expanded; search is uncapped.
@@ -170,10 +166,7 @@ struct HomeSheetList: View {
         let sorted = routes.sortedByLine()
         guard isSearching else { return sorted }
         guard !search.isEmpty else { return [] }
-        return sorted.filter {
-            $0.shortName.localizedCaseInsensitiveContains(search)
-                || $0.longName.localizedCaseInsensitiveContains(search)
-        }
+        return sorted.matching(search)
     }
 
     /// Full-sheet empty state fires only for a search with no matches; idle always

@@ -6,6 +6,7 @@
 import Foundation
 import Observation
 import FoliBusUI
+import PosankkaCore
 
 /// App-wide state: the shared data stores, the card selection, and the
 /// loading and polling that follow from it. Map framing stays in `HomeView`.
@@ -42,7 +43,7 @@ final class AppModel {
 
     func loadBoatStops() async {
         guard let routes = routes.state.value else { return }
-        boatStopIDs = await Self.boatStopIDs(routes: routes, client: client)
+        boatStopIDs = await client.ferryStopIDs(in: routes)
     }
 
     func stop(withID id: Foli.Stop.ID) -> Foli.Stop? {
@@ -97,19 +98,5 @@ final class AppModel {
         } else {
             vehicles.stopMonitoring()
         }
-    }
-
-    /// Stop IDs served by a ferry route (GTFS `route_type` 4): ferry routes →
-    /// trips → stop times. Failures skip a trip (bus fallback).
-    private static func boatStopIDs(routes: [Foli.Route], client: FoliClient) async -> Set<Foli.Stop.ID> {
-        var ids: Set<Foli.Stop.ID> = []
-        for route in routes where route.type == 4 {
-            guard let trips = try? await client.fetchTrips(forRoute: route.id) else { continue }
-            for trip in trips {
-                guard let stopTimes = try? await client.fetchStopTimes(forTrip: trip.tripId) else { continue }
-                ids.formUnion(stopTimes.compactMap(\.stopId))
-            }
-        }
-        return ids
     }
 }

@@ -9,6 +9,7 @@ import SwiftUI
 import CoreLocation
 import MapKit
 import FoliBusUI
+import PosankkaCore
 
 struct HomeView: View {
     /// Initial span when centering on the user's location (~1.7 km tall).
@@ -219,9 +220,7 @@ struct HomeView: View {
         if let coordinate = model.selection.stop?.location?.toCLCoordinate() {
             anchor = coordinate
         } else if let direction = model.routeDetail.selectedDirection {
-            let coords = direction.path.isEmpty
-                ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
-                : direction.path
+            let coords = direction.framingCoordinates.map { $0.toCLCoordinate() }
             guard let center = MKCoordinateRegion(enclosing: coords)?.center else { return }
             anchor = center
         } else {
@@ -255,9 +254,7 @@ struct HomeView: View {
     private func frameSelectedDirection() {
         // The stop card wins: never re-frame the route over it.
         guard model.selection.stop == nil, let direction = model.routeDetail.selectedDirection else { return }
-        let coords = direction.path.isEmpty
-            ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
-            : direction.path
+        let coords = direction.framingCoordinates.map { $0.toCLCoordinate() }
         guard let region = MKCoordinateRegion(enclosing: coords) else { return }
 
         // Inflate the span by 1/fraction so the route occupies just the visible

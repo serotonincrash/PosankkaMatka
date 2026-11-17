@@ -8,6 +8,7 @@
 import Foundation
 import Observation
 import FoliBusUI
+import PosankkaCore
 
 /// Observable owner of one async-loaded resource: state, error mapping, and
 /// timestamps.

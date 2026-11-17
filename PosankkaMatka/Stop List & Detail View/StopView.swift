@@ -8,6 +8,7 @@
 import SwiftUI
 import UIKit
 import FoliBusUI
+import PosankkaCore
 struct StopView: View {
     let stop: Foli.Stop
     @Environment(AppModel.self) private var model

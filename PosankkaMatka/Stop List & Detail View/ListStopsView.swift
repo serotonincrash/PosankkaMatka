@@ -7,8 +7,8 @@
 
 import SwiftUI
 import FoliBusUI
-import CoreLocation
 import Forever
+import PosankkaCore
 
 /// The home-sheet list (nearby stops + routes) with search and the distance
 /// filter. Reads resource stores from the environment; HomeView owns the stack.
@@ -58,7 +58,7 @@ struct ListStopsView: View {
     /// Nearby stops, nearest first. No location → empty (the list discloses why).
     private func nearbyRows(for stops: [Foli.Stop]) -> [StopWithDistance] {
         guard isLocationAuthorized, let coordinate = model.location.currentLocation else { return [] }
-        let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let origin = Foli.Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let maxDistance: Double? = if case .proximity(let meters) = searchFilter, meters > 0 {
             meters
         } else {

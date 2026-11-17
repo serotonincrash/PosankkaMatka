@@ -8,6 +8,7 @@
 import SwiftUI
 import MapKit
 import FoliBusUI
+import PosankkaCore
 
 /// The map surface: user location, viewport stop markers, the selected route's
 /// line/pins/stops, and live vehicle pucks.
@@ -30,7 +31,7 @@ struct MapView: View {
     let routeIsSelected: Bool
     /// Live vehicles (SIRI VM) with their interpolated draw positions, shown
     /// while a detail card is open.
-    let vehicles: [DisplayedVehicle]
+    let vehicles: [VehicleTracker.Position]
     /// The route per line number (SIRI `lineRef` == short name), for pin colors.
     let lineRoutes: [String: Foli.Route]
 
@@ -60,7 +61,7 @@ struct MapView: View {
     private var mapContent: some MapContent {
         if let direction {
             if !direction.path.isEmpty {
-                MapPolyline(coordinates: direction.path)
+                MapPolyline(coordinates: direction.path.map { $0.toCLCoordinate() })
                     .stroke(routeColor,
                             style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
             }
@@ -85,13 +86,13 @@ struct MapView: View {
                 }
             }
             if let start = direction.start {
-                Annotation("Start", coordinate: start) {
+                Annotation("Start", coordinate: start.toCLCoordinate()) {
                     routeEndpointPin(systemImage: "smallcircle.filled.circle.fill")
                 }
                 .annotationTitles(.hidden)
             }
             if let end = direction.end {
-                Annotation("End", coordinate: end) {
+                Annotation("End", coordinate: end.toCLCoordinate()) {
                     routeEndpointPin(systemImage: "flag.checkered")
                 }
                 .annotationTitles(.hidden)
@@ -112,7 +113,7 @@ struct MapView: View {
         // Vehicles last, on top; untagged (non-selectable). The store
         // interpolates positions between polls, so these arrive pre-blended.
         ForEach(vehicles) { displayed in
-            Annotation(displayed.vehicle.publishedLineName, coordinate: displayed.coordinate) {
+            Annotation(displayed.vehicle.publishedLineName, coordinate: displayed.coordinate.toCLCoordinate()) {
                 vehiclePin(for: displayed.vehicle)
             }
             .annotationTitles(.hidden)

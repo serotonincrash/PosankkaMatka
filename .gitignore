@@ -64,3 +64,6 @@ fastlane/test_output
 
 # ZCode agent session files
 .zcode/
+
+# Local package: the app's Package.resolved pins versions
+PosankkaCore/Package.resolved

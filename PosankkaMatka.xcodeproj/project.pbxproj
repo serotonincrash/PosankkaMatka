@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB3393007B6F200F86DBB /* FoliBusAPI */; };
 		D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB33B3007B6F200F86DBB /* FoliBusUI */; };
+		D1C0E0032FF0000100AA0001 /* PosankkaCore in Frameworks */ = {isa = PBXBuildFile; productRef = D1C0E0022FF0000100AA0001 /* PosankkaCore */; };
 		D1785CF330617DB300E87E45 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D1785CF230617DB300E87E45 /* Localizable.xcstrings */; };
 		D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1A8200B302DDA0800BFEC15 /* Forever */; };
 		D1FA4CCC302091830052526B /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1FA4CCB302091830052526B /* Forever */; };
@@ -67,6 +68,7 @@
 				D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */,
 				D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */,
 				D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */,
+				D1C0E0032FF0000100AA0001 /* PosankkaCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +135,7 @@
 				D1FA4CCB302091830052526B /* Forever */,
 				D1FA4CCE302091ED0052526B /* Forever */,
 				D1A8200B302DDA0800BFEC15 /* Forever */,
+				D1C0E0022FF0000100AA0001 /* PosankkaCore */,
 			);
 			productName = PosankkaMatka;
 			productReference = D158E60C2F833CA400DF70CE /* PosankkaMatka.app */;
@@ -220,6 +223,7 @@
 			packageReferences = (
 				D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */,
 				D1A8200A302DDA0800BFEC15 /* XCRemoteSwiftPackageReference "Forever" */,
+				D1C0E0012FF0000100AA0001 /* XCLocalSwiftPackageReference "PosankkaCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D158E60D2F833CA400DF70CE /* Products */;
@@ -616,6 +620,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		D1C0E0012FF0000100AA0001 /* XCLocalSwiftPackageReference "PosankkaCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = PosankkaCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -636,6 +647,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D1C0E0022FF0000100AA0001 /* PosankkaCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PosankkaCore;
+		};
 		D13DB3393007B6F200F86DBB /* FoliBusAPI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D13DB3383007B6F200F86DBB /* XCRemoteSwiftPackageReference "FoliBusAPI" */;

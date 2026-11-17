@@ -8,6 +8,7 @@
 import SwiftUI
 import Observation
 import FoliBusUI
+import PosankkaCore
 
 /// Shared sheet detents, owned by `HomeView` and bound only here, so per-drag
 /// writes re-evaluate these trivial views — never `HomeView`/the Map.

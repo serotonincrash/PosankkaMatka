@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FoliBusUI
+import PosankkaCore
 
 /// The pushed route detail: a direction Picker above the selected direction's
 /// stops. `RouteDetailStore` is the shared source of truth, so the Picker drives
