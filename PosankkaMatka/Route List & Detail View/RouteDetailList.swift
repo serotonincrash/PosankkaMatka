@@ -72,13 +72,6 @@ struct RouteDetailList: View {
         .accessibilityHint("Switches which direction's stops are shown")
     }
 
-    private func stopCode(_ id: String) -> some View {
-        Text(id)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .monospaced()
-    }
-
     @ViewBuilder
     private var content: some View {
         switch routeDetail.directions.state {
@@ -96,28 +89,13 @@ struct RouteDetailList: View {
                             Button {
                                 selectedStopID = stop.id
                             } label: {
-                                // Stacked at accessibility sizes.
-                                if dynamicTypeSize.isAccessibilitySize {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        stopCode(stop.id)
-                                        Text(stop.name)
-                                    }
-                                } else {
-                                    HStack {
-                                        stopCode(stop.id)
-                                        Text(stop.name)
-                                        Spacer()
-                                    }
-                                }
+                                StopRowLabel(stopID: stop.id, name: stop.name)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .tint(.primary)
-                            // Voice Control gets the short forms.
                             .accessibilityLabel(StopWithDistance(stop).spokenDescription)
                             .accessibilityHint("Opens live arrivals for this stop")
-                            .accessibilityInputLabels([
-                                "\(stop.id) \(stop.name)",
-                                stop.name
-                            ])
+                            .stopInputLabels(stopID: stop.id, name: stop.name)
                         }
                     } footer: {
                         Text("Live stop and bus data refreshes periodically and may not always be accurate.")
