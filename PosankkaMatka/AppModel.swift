@@ -29,6 +29,9 @@ final class AppModel {
 
     @ObservationIgnored private var routeLoadTask: Task<Void, Never>?
     @ObservationIgnored private var directionLoads: Set<String> = []
+    /// Exact trips per GTFS trip id; preferred over matching a line direction.
+    private var tripDirections: [String: RouteDirection] = [:]
+    @ObservationIgnored private var tripLoads: Set<String> = []
     @ObservationIgnored private var stopIndex: (count: Int, byID: [Foli.Stop.ID: Foli.Stop]) = (0, [:])
 
     init(client: FoliClient) {
@@ -88,13 +91,38 @@ final class AppModel {
         case .stale(let p, let seen): position = p; lastSeen = seen
         default: return nil
         }
-        let directions = route(forLine: position.vehicle.lineRef).flatMap { directionsByRoute[$0.id] } ?? []
         let journey = VehicleJourney(
             vehicle: position.vehicle,
-            direction: directions.bestMatch(for: position.vehicle),
+            direction: direction(for: position.vehicle),
             stops: stopsByID
         )
         return (journey, position, lastSeen)
+    }
+
+    /// The bus's exact GTFS trip once loaded, else the line direction its
+    /// upcoming stops best match.
+    private func direction(for vehicle: Foli.VehicleLocation) -> RouteDirection? {
+        if let tripId = vehicle.gtfsTripId {
+            if let exact = tripDirections[tripId] { return exact }
+            loadTrip(tripId)
+        }
+        let directions = route(forLine: vehicle.lineRef).flatMap { directionsByRoute[$0.id] } ?? []
+        return directions.bestMatch(for: vehicle)
+    }
+
+    /// Loads (once) one trip's stops and shape. Safe to call during a view
+    /// update: observable state only changes when the load finishes.
+    private func loadTrip(_ tripId: String) {
+        guard tripDirections[tripId] == nil, tripLoads.insert(tripId).inserted else { return }
+        let client = client
+        Task {
+            let loaded = try? await RouteDirection.load(tripId: tripId, client: client)
+            if let loaded {
+                tripDirections[tripId] = loaded
+                tripLoads.remove(tripId)
+            }
+            // A failed load stays in `tripLoads`, so it isn't retried every frame.
+        }
     }
 
     /// Loads (once) the directions of the line a tracked bus runs on.
@@ -170,7 +198,11 @@ final class AppModel {
             vehicles.start(.line(route.shortName))
         case .vehicle(let key):
             vehicles.start(.trip(key))
+            // The line's directions are the fallback when the exact trip is unknown or fails.
             loadDirections(forLine: key.lineRef)
+            if let tripId = vehicles.latestVehicles.first(where: { $0.vehicleRef == key.vehicleRef })?.gtfsTripId {
+                loadTrip(tripId)
+            }
         case nil:
             vehicles.stopMonitoring()
         }

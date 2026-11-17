@@ -45,6 +45,21 @@ public struct RouteDirection: Identifiable, Sendable {
         }
     }
 
+    /// One exact trip's stops and path, e.g. the run a live bus reports via
+    /// `gtfsTripId`, so variants and short turns draw correctly. Nil when the
+    /// trip isn't in the GTFS index.
+    public static func load(tripId: String, client: FoliClient) async throws -> RouteDirection? {
+        guard let trip = try await client.trip(for: tripId) else { return nil }
+        async let stops = stops(tripId: tripId, client: client)
+        async let path = path(shapeId: trip.shapeId, client: client)
+        return RouteDirection(
+            id: trip.directionId,
+            headsign: trip.tripHeadsign,
+            stops: try await stops,
+            path: await path
+        )
+    }
+
     private static func stops(tripId: String, client: FoliClient) async throws -> [Foli.Stop] {
         let stopTimes = try await client.fetchStopTimes(forTrip: tripId)
             .sorted { $0.stopSequence < $1.stopSequence }

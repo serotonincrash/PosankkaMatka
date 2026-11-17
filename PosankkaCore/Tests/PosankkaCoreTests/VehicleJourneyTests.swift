@@ -172,6 +172,22 @@ private func bus(
     #expect(vehicles.prefix(2).trip(for: arrival) == nil)
 }
 
+@Test func arrivalPrefersItsVehicleRefWhenTheRunAgrees() {
+    func arrival(vehicleRef: String?) -> Foli.Arrival {
+        Foli.Arrival(
+            recordedAtTime: 0, lineRef: "15", monitored: true, originAimedDepartureTime: 1000,
+            destinationAimedArrivalTime: 0, destinationDisplay: "", aimedArrivalTime: 0,
+            expectedArrivalTime: 0, aimedDepartureTime: 0, expectedDepartureTime: 0,
+            vehicleRef: vehicleRef
+        )
+    }
+    // Two buses report the same run (e.g. a swap); the arrival names the one serving it.
+    let vehicles = [bus("a", line: "15", origin: 1000), bus("b", line: "15", origin: 1000), bus("c", line: "15", origin: 900)]
+    #expect(vehicles.trip(for: arrival(vehicleRef: "b"))?.vehicleRef == "b")
+    // A ref now on another run falls back to line and origin.
+    #expect(vehicles.trip(for: arrival(vehicleRef: "c"))?.vehicleRef == "a")
+}
+
 // MARK: - Tracker
 
 private let t0 = Date(timeIntervalSince1970: 0)

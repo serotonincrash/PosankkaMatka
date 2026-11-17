@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "PosankkaCore", targets: ["PosankkaCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/serotonincrash/FoliBusAPI", from: "2.3.0"),
+        .package(url: "https://github.com/serotonincrash/FoliBusAPI", from: "2.5.0"),
     ],
     targets: [
         .target(
