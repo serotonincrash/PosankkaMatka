@@ -144,10 +144,13 @@ struct HomeView: View {
             async let stops: Void = stopsStore.load { try await foli.fetchStops() }
             async let routes: Void = routesStore.load { try await foli.fetchRoutes() }
             _ = await (stops, routes)
+            // Center once stops are in (markers for the first region need
+            // them), without waiting on the slower ferry-stop lookup.
+            async let centered: Void = centerOnUser()
             if let routes = routesStore.state.value {
                 boatStopIDs = await Self.boatStopIDs(routes: routes, using: foli)
             }
-            await centerOnUser()
+            await centered
         }
     }
 
