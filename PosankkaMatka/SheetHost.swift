@@ -35,11 +35,15 @@ final class SheetModel {
 /// Neither sheet is swipe-dismissable: a downward drag always collapses, and
 /// the card's close button exits to the lists.
 struct SheetHost: View {
+    /// What the card shows; changed only through the bindings and `onClose`.
+    let selection: Selection
+    /// Selection bindings for the lists; their setters run HomeView's transitions.
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
-    @Binding var stop: StopWithDistance?
     /// Shared detents, bound to the sheets.
     @Bindable var sheetModel: SheetModel
+    /// The card's close button: exits to the lists from however deep.
+    let onClose: () -> Void
     /// Detent-reframe callback, fired from here so per-drag detent reads stay
     /// out of `HomeView.body` (which would re-diff the Map on every write).
     let onCardDetentChange: () -> Void
@@ -65,13 +69,13 @@ struct SheetHost: View {
                 .allowsHitTesting(false)
                 .sheet(isPresented: cardPresented) {
                     cardChrome {
-                        if let stop {
-                            StopView(stopWithDistance: stop)
+                        if let stop = selection.stop {
+                            StopView(stop: stop)
                                 // Fresh identity per stop → arrivals re-fetch.
                                 .id(stop.id)
                                 .transition(cardTransition)
-                        } else if let selectedRoute {
-                            RouteDetailList(route: selectedRoute, selectedStopID: $selectedStopID)
+                        } else if let route = selection.route {
+                            RouteDetailList(route: route, selectedStopID: $selectedStopID)
                                 .transition(cardTransition)
                         }
                     }
@@ -95,15 +99,10 @@ struct SheetHost: View {
             ZStack {
                 content()
             }
-            .animation(.spring(duration: 0.3), value: stop)
-            .animation(.spring(duration: 0.3), value: selectedRoute)
+            .animation(.spring(duration: 0.3), value: selection)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    CardCloseButton {
-                        // Exit to the lists from however deep the card is.
-                        stop = nil
-                        selectedRoute = nil
-                    }
+                    CardCloseButton(action: onClose)
                 }
             }
         }
@@ -126,7 +125,7 @@ struct SheetHost: View {
     /// interactively dismissed; dismissal flows through the selection state.
     private var masterPresented: Binding<Bool> {
         Binding(
-            get: { stop == nil && selectedRoute == nil },
+            get: { selection.isEmpty },
             set: { _ in }
         )
     }
@@ -134,7 +133,7 @@ struct SheetHost: View {
     /// Card shows while anything is selected; same no-op-setter reasoning.
     private var cardPresented: Binding<Bool> {
         Binding(
-            get: { stop != nil || selectedRoute != nil },
+            get: { !selection.isEmpty },
             set: { _ in }
         )
     }

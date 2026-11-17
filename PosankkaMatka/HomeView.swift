@@ -36,12 +36,12 @@ struct HomeView: View {
     @State private var displayedStops: [Foli.Stop] = []
     /// Region that produced `displayedStops`; skips no-op recomputes.
     @State private var lastMarkerRegion: MKCoordinateRegion?
-    @State private var selectedStopID: Foli.Stop.ID?
-    @State private var stop: StopWithDistance?
+    /// The open card's stop and/or route; changed only through the
+    /// transitions under "Selection" so their side effects stay in one place.
+    @State private var selection = Selection()
     /// Shared sheet detents, bound only by `SheetHost`; this view reads them
     /// solely in untracked framing methods (see `onCardDetentChange`).
     @State private var sheetModel = SheetModel()
-    @State private var selectedRoute: Foli.Route?
     /// Per-direction route data + the selected direction, shared with the map
     /// and the card's `RouteDetailList`.
     @State private var routeDetail = RouteDetailStore()
@@ -66,14 +66,14 @@ struct HomeView: View {
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
                 MapView(
                     camera: $camera,
-                    selectedStopID: $selectedStopID,
+                    selectedStopID: stopSelection,
                     mapScope: mapScope,
                     displayedStops: displayedStops,
                     boatStopIDs: boatStopIDs,
                     direction: routeDetail.selectedDirection,
-                    routeColor: selectedRoute?.color ?? .accentColor,
+                    routeColor: selection.route?.color ?? .accentColor,
                     isZoomedIn: isZoomedIn,
-                    routeIsSelected: selectedRoute != nil,
+                    routeIsSelected: selection.route != nil,
                     vehicles: vehicleStore.displayVehicles(at: context.date),
                     lineRoutes: lineRoutes
                 )
@@ -86,26 +86,6 @@ struct HomeView: View {
                     visibleRegion = context.region
                     liveCamera = context.camera
                     updateDisplayedStops(for: context.region)
-                }
-                .onChange(of: selectedStopID) { _, newValue in
-                    // Tapping empty map (or the selected marker again) clears
-                    // MapKit's selection — with a stop card up, that reads as
-                    // "dismiss" (Maps-style). A stop over a route just pops the
-                    // stop; X remains the full exit.
-                    if newValue == nil, stop != nil {
-                        stop = nil
-                    } else {
-                        handleStopSelection(newValue)
-                    }
-                }
-                .onChange(of: stop) { _, newStop in
-                    // Card dismissed: drop the marker highlight so the same stop is re-tappable.
-                    if newStop == nil { selectedStopID = nil }
-                    updateVehicleMonitoring()
-                }
-                .onChange(of: selectedRoute) { _, newRoute in
-                    handleRouteSelection(newRoute)
-                    updateVehicleMonitoring()
                 }
             }
             .onChange(of: scenePhase) { _, phase in
@@ -127,10 +107,11 @@ struct HomeView: View {
             .accessibilityHidden(true)
 
             SheetHost(
-                selectedStopID: $selectedStopID,
-                selectedRoute: $selectedRoute,
-                stop: $stop,
+                selection: selection,
+                selectedStopID: stopSelection,
+                selectedRoute: routeSelection,
                 sheetModel: sheetModel,
+                onClose: closeCard,
                 onCardDetentChange: reframeSelection
             )
         }
@@ -176,11 +157,33 @@ struct HomeView: View {
 
     // MARK: - Selection
 
-    /// Presents the stop card and frames the stop above it. `selectedStopID`
-    /// clears on dismissal, not here (that would drop the marker highlight).
-    private func handleStopSelection(_ newValue: Foli.Stop.ID?) {
-        guard let newValue,
-              let found = allStops.first(where: { $0.id == newValue }),
+    /// The stop selection as the map and lists see it. Setting an ID opens
+    /// (or swaps) the stop card; setting nil — MapKit does this when empty map
+    /// or the selected marker is tapped — pops the stop card (Maps-style),
+    /// back to the route if one is under it.
+    private var stopSelection: Binding<Foli.Stop.ID?> {
+        Binding(
+            get: { selection.stop?.id },
+            set: { id in
+                if let id { selectStop(id: id) } else { closeStop() }
+            }
+        )
+    }
+
+    /// The route selection as the lists see it; nil closes the card.
+    private var routeSelection: Binding<Foli.Route?> {
+        Binding(
+            get: { selection.route },
+            set: { route in
+                if let route { selectRoute(route) } else { closeCard() }
+            }
+        )
+    }
+
+    /// Presents (or swaps) the stop card and frames the stop above it.
+    private func selectStop(id: Foli.Stop.ID) {
+        guard id != selection.stop?.id,
+              let found = allStops.first(where: { $0.id == id }),
               let coordinate = found.location?.toCLCoordinate() else { return }
         // Every stop-card change re-opens at .medium — a tall or peek detent
         // carried over from the previous content buries the reframed map.
@@ -194,17 +197,43 @@ struct HomeView: View {
         // Recenter BEFORE presenting the card: the concurrent sheet transition
         // can make MapKit skip the camera animation and drop the zoom.
         frameSelectedStop(at: coordinate)
-        stop = StopWithDistance(found)
+        selection.stop = found
+        updateVehicleMonitoring()
     }
 
-    /// Loads the route's per-direction data; deselecting clears it.
-    private func handleRouteSelection(_ route: Foli.Route?) {
+    /// Opens the route card (routes come from the master list, so no stop is
+    /// up) and loads its per-direction data.
+    private func selectRoute(_ route: Foli.Route) {
+        guard route != selection.route else { return }
+        selection = Selection(route: route)
+        loadRoute(route)
+        updateVehicleMonitoring()
+    }
+
+    /// Pops the stop card: back to the route under it, else to the lists.
+    private func closeStop() {
+        guard selection.stop != nil else { return }
+        selection.stop = nil
+        updateVehicleMonitoring()
+    }
+
+    /// Closes the card entirely, from however deep, back to the lists.
+    private func closeCard() {
+        guard !selection.isEmpty else { return }
+        selection = Selection()
+        cancelRouteLoad()
+        routeDetail.reset()
+        updateVehicleMonitoring()
+    }
+
+    private func cancelRouteLoad() {
         routeLoadTask?.cancel()
         routeLoadTask = nil
-        guard let route else {
-            routeDetail.reset()
-            return
-        }
+    }
+
+    /// Loads the route's per-direction data, superseding any earlier load.
+    private func loadRoute(_ route: Foli.Route) {
+        cancelRouteLoad()
         let foli = foli
         // Cards are always fresh here (routes come from the lists): default detent.
         sheetModel.cardDetent = .medium
@@ -219,9 +248,9 @@ struct HomeView: View {
     /// Keeps vehicle polling in step with the open card (stop scope wins);
     /// no card open stops the poller.
     private func updateVehicleMonitoring() {
-        if let stop {
-            vehicleStore.start(.stop(stop.stop.id), using: foli)
-        } else if let route = selectedRoute {
+        if let stop = selection.stop {
+            vehicleStore.start(.stop(stop.id), using: foli)
+        } else if let route = selection.route {
             vehicleStore.start(.line(route.shortName), using: foli)
         } else {
             vehicleStore.stopMonitoring()
@@ -265,7 +294,7 @@ struct HomeView: View {
     /// `SheetHost` from untracked context — never read from `body`.
     private func reframeSelection() {
         let anchor: CLLocationCoordinate2D
-        if let coordinate = stop?.stop.location?.toCLCoordinate() {
+        if let coordinate = selection.stop?.location?.toCLCoordinate() {
             anchor = coordinate
         } else if let direction = routeDetail.selectedDirection {
             let coords = direction.path.isEmpty
@@ -303,7 +332,7 @@ struct HomeView: View {
     /// not centered behind it.
     private func frameSelectedDirection() {
         // The stop card wins: never re-frame the route over it.
-        guard stop == nil, let direction = routeDetail.selectedDirection else { return }
+        guard selection.stop == nil, let direction = routeDetail.selectedDirection else { return }
         let coords = direction.path.isEmpty
             ? direction.stops.compactMap { $0.location?.toCLCoordinate() }
             : direction.path
@@ -407,7 +436,7 @@ struct HomeView: View {
     /// and orientation, framed above whatever sheet is up.
     private func recenterOnUser() {
         guard locationManager.isAuthorized, let coordinate = locationManager.currentLocation else { return }
-        let detent = (stop != nil || selectedRoute != nil) ? sheetModel.cardDetent : sheetModel.listDetent
+        let detent = !selection.isEmpty ? sheetModel.cardDetent : sheetModel.listDetent
         moveCamera(anchor: coordinate, nudge: (1 - visibleFraction(for: detent)) / 2)
     }
 }

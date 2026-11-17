@@ -9,7 +9,7 @@ import SwiftUI
 import UIKit
 import FoliBusUI
 struct StopView: View {
-    var stopWithDistance: StopWithDistance
+    let stop: Foli.Stop
     @FoliService var foli
     @Environment(ResourceStore<[Foli.Route]>.self) private var routesStore
     @State private var arrivalsStore = ResourceStore<[Foli.Arrival]>()
@@ -114,7 +114,7 @@ struct StopView: View {
                 await arrivalsStore.refresh(fetch)
             }
         }
-        .navigationTitle(Text(stopWithDistance.stop.name))
+        .navigationTitle(Text(stop.name))
         .navigationBarTitleDisplayMode(.inline)
         // First arrival only: focus the header when the list materializes;
         // poll refreshes (success → success) must never yank focus back.
@@ -135,7 +135,7 @@ struct StopView: View {
 
     private var fetch: @Sendable () async throws -> [Foli.Arrival] {
         let foli = foli
-        let stopId = stopWithDistance.stop.id
+        let stopId = stop.id
         return { try await foli.fetchArrivals(for: stopId) }
     }
 
@@ -169,7 +169,7 @@ struct StopView: View {
     /// stop's arrivals these are, not just "Arrivals".
     private var arrivalsTitle: some View {
         Text("Arrivals")
-            .accessibilityLabel("Arrivals for \(stopWithDistance.stop.name)")
+            .accessibilityLabel("Arrivals for \(stop.name)")
             .accessibilityAddTraits(.isHeader)
             .accessibilityFocused($focusArrivals)
     }
