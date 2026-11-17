@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		D13DB33A3007B6F200F86DBB /* FoliBusAPI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB3393007B6F200F86DBB /* FoliBusAPI */; };
 		D13DB33C3007B6F200F86DBB /* FoliBusUI in Frameworks */ = {isa = PBXBuildFile; productRef = D13DB33B3007B6F200F86DBB /* FoliBusUI */; };
+		D15474E530ACB8D3003B33BD /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D15474E430ACB8D3003B33BD /* WidgetKit.framework */; };
+		D15474E730ACB8D3003B33BD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D15474E630ACB8D3003B33BD /* SwiftUI.framework */; };
+		D15474F430ACB8D5003B33BD /* PosankkaMatkaWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D15474E230ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D154750630ACBADF003B33BD /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D1785CF230617DB300E87E45 /* Localizable.xcstrings */; };
 		D1785CF330617DB300E87E45 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = D1785CF230617DB300E87E45 /* Localizable.xcstrings */; };
 		D1A8200C302DDA0800BFEC15 /* Forever in Frameworks */ = {isa = PBXBuildFile; productRef = D1A8200B302DDA0800BFEC15 /* Forever */; };
 		D1C0E0032FF0000100AA0001 /* PosankkaCore in Frameworks */ = {isa = PBXBuildFile; productRef = D1C0E0022FF0000100AA0001 /* PosankkaCore */; };
@@ -17,6 +21,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		D15474F230ACB8D5003B33BD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D158E6042F833CA400DF70CE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D15474E130ACB8D3003B33BD;
+			remoteInfo = PosankkaMatkaWidgetsExtension;
+		};
 		D158E61A2F833CA600DF70CE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D158E6042F833CA400DF70CE /* Project object */;
@@ -33,7 +44,24 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		D15474F930ACB8D5003B33BD /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D15474F430ACB8D5003B33BD /* PosankkaMatkaWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		D15474E230ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PosankkaMatkaWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D15474E430ACB8D3003B33BD /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		D15474E630ACB8D3003B33BD /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		D158E60C2F833CA400DF70CE /* PosankkaMatka.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PosankkaMatka.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D158E6192F833CA600DF70CE /* PosankkaMatkaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PosankkaMatkaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D158E6232F833CA600DF70CE /* PosankkaMatkaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PosankkaMatkaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -48,13 +76,36 @@
 			);
 			target = D158E60B2F833CA400DF70CE /* PosankkaMatka */;
 		};
+		D154750330ACBA58003B33BD /* Exceptions for "PosankkaMatkaWidgets" folder in "PosankkaMatkaWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D15474E130ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension */;
+		};
+		D154750530ACBA71003B33BD /* Exceptions for "PosankkaMatka" folder in "PosankkaMatkaWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Stop Alert/StopAlertAttributes.swift",
+			);
+			target = D15474E130ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D15474FF30ACBA46003B33BD /* PosankkaMatkaWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D154750330ACBA58003B33BD /* Exceptions for "PosankkaMatkaWidgets" folder in "PosankkaMatkaWidgetsExtension" target */,
+			);
+			path = PosankkaMatkaWidgets;
+			sourceTree = "<group>";
+		};
 		D158E60E2F833CA400DF70CE /* PosankkaMatka */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				D15474DD30ACB083003B33BD /* Exceptions for "PosankkaMatka" folder in "PosankkaMatka" target */,
+				D154750530ACBA71003B33BD /* Exceptions for "PosankkaMatka" folder in "PosankkaMatkaWidgetsExtension" target */,
 			);
 			path = PosankkaMatka;
 			sourceTree = "<group>";
@@ -72,6 +123,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D15474DF30ACB8D3003B33BD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D15474E730ACB8D3003B33BD /* SwiftUI.framework in Frameworks */,
+				D15474E530ACB8D3003B33BD /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D158E6092F833CA400DF70CE /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -102,6 +162,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D15474E330ACB8D3003B33BD /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D15474E430ACB8D3003B33BD /* WidgetKit.framework */,
+				D15474E630ACB8D3003B33BD /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		D158E6032F833CA400DF70CE = {
 			isa = PBXGroup;
 			children = (
@@ -109,6 +178,8 @@
 				D158E60E2F833CA400DF70CE /* PosankkaMatka */,
 				D158E61C2F833CA600DF70CE /* PosankkaMatkaTests */,
 				D158E6262F833CA600DF70CE /* PosankkaMatkaUITests */,
+				D15474E330ACB8D3003B33BD /* Frameworks */,
+				D15474FF30ACBA46003B33BD /* PosankkaMatkaWidgets */,
 				D158E60D2F833CA400DF70CE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -119,6 +190,7 @@
 				D158E60C2F833CA400DF70CE /* PosankkaMatka.app */,
 				D158E6192F833CA600DF70CE /* PosankkaMatkaTests.xctest */,
 				D158E6232F833CA600DF70CE /* PosankkaMatkaUITests.xctest */,
+				D15474E230ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -126,6 +198,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D15474E130ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D15474F530ACB8D5003B33BD /* Build configuration list for PBXNativeTarget "PosankkaMatkaWidgetsExtension" */;
+			buildPhases = (
+				D15474DE30ACB8D3003B33BD /* Sources */,
+				D15474DF30ACB8D3003B33BD /* Frameworks */,
+				D15474E030ACB8D3003B33BD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D15474FF30ACBA46003B33BD /* PosankkaMatkaWidgets */,
+			);
+			name = PosankkaMatkaWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = PosankkaMatkaWidgetsExtension;
+			productReference = D15474E230ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		D158E60B2F833CA400DF70CE /* PosankkaMatka */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D158E62D2F833CA600DF70CE /* Build configuration list for PBXNativeTarget "PosankkaMatka" */;
@@ -133,10 +227,12 @@
 				D158E6082F833CA400DF70CE /* Sources */,
 				D158E6092F833CA400DF70CE /* Frameworks */,
 				D158E60A2F833CA400DF70CE /* Resources */,
+				D15474F930ACB8D5003B33BD /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D15474F330ACB8D5003B33BD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D158E60E2F833CA400DF70CE /* PosankkaMatka */,
@@ -207,9 +303,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					D15474E130ACB8D3003B33BD = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					D158E60B2F833CA400DF70CE = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -246,11 +345,20 @@
 				D158E60B2F833CA400DF70CE /* PosankkaMatka */,
 				D158E6182F833CA600DF70CE /* PosankkaMatkaTests */,
 				D158E6222F833CA600DF70CE /* PosankkaMatkaUITests */,
+				D15474E130ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D15474E030ACB8D3003B33BD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D154750630ACBADF003B33BD /* Localizable.xcstrings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D158E60A2F833CA400DF70CE /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -276,6 +384,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D15474DE30ACB8D3003B33BD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D158E6082F833CA400DF70CE /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -300,6 +415,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		D15474F330ACB8D5003B33BD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D15474E130ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension */;
+			targetProxy = D15474F230ACB8D5003B33BD /* PBXContainerItemProxy */;
+		};
 		D158E61B2F833CA600DF70CE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = D158E60B2F833CA400DF70CE /* PosankkaMatka */;
@@ -313,6 +433,68 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		D15474F630ACB8D5003B33BD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XL5JK4F896;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PosankkaMatkaWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PosankkaMatkaWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = sh.sero.PosankkaMatka.PosankkaMatkaWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D15474F730ACB8D5003B33BD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XL5JK4F896;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PosankkaMatkaWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PosankkaMatkaWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = sh.sero.PosankkaMatka.PosankkaMatkaWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		D158E62B2F833CA600DF70CE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -599,6 +781,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D15474F530ACB8D5003B33BD /* Build configuration list for PBXNativeTarget "PosankkaMatkaWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D15474F630ACB8D5003B33BD /* Debug */,
+				D15474F730ACB8D5003B33BD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		D158E6072F833CA400DF70CE /* Build configuration list for PBXProject "PosankkaMatka" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
