@@ -39,30 +39,7 @@ struct StopView: View {
                         List {
                             Section {
                                 ForEach(arrivals) { arrival in
-                                    // Stacked at accessibility sizes.
-                                    Group {
-                                        if dynamicTypeSize.isAccessibilitySize {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                lineBadge(for: arrival)
-                                                Text(arrival.destinationDisplay)
-                                                countdown(for: arrival)
-                                            }
-                                        } else {
-                                            HStack(spacing: 12) {
-                                                lineBadge(for: arrival)
-                                                Text(arrival.destinationDisplay)
-                                                Spacer()
-                                                countdown(for: arrival)
-                                            }
-                                        }
-                                    }
-                                    .accessibilityElement(children: .combine)
-                                    .accessibilityLabel(
-                                        spokenArrival(
-                                            line: arrival.lineRef,
-                                            destination: arrival.destinationDisplay,
-                                            departure: arrival.expectedDepartureDate
-                                        ))
+                                    arrivalRow(arrival, trip: model.vehicles.latestVehicles.trip(for: arrival))
                                 }
                             } header: {
                                 // Stacked at accessibility sizes.
@@ -124,6 +101,69 @@ struct StopView: View {
         let client = model.client
         let stopId = stop.id
         return { try await client.fetchArrivals(for: stopId) }
+    }
+
+    /// A row whose bus is live (`trip` non-nil) opens its vehicle card; others
+    /// stay plain. `trip` refreshes with each vehicle poll, between arrival fetches.
+    @ViewBuilder
+    private func arrivalRow(_ arrival: Foli.Arrival, trip: TripKey?) -> some View {
+        if let trip {
+            Button {
+                model.selectVehicle(trip)
+            } label: {
+                arrivalContent(arrival, showsChevron: true)
+            }
+            .tint(.primary)
+            .accessibilityHint("Tracks this bus live")
+            .accessibilityAction(named: "Track Bus") { model.selectVehicle(trip) }
+            .contextMenu {
+                Button("Track Bus", systemImage: "bus") { model.selectVehicle(trip) }
+                // "Notify Me" goes here once stop alerts reach arrival rows.
+            }
+        } else {
+            arrivalContent(arrival, showsChevron: false)
+        }
+    }
+
+    private func arrivalContent(_ arrival: Foli.Arrival, showsChevron: Bool) -> some View {
+        // Stacked at accessibility sizes.
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        lineBadge(for: arrival)
+                        Text(arrival.destinationDisplay)
+                        countdown(for: arrival)
+                    }
+                    if showsChevron {
+                        Spacer()
+                        chevron
+                    }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    lineBadge(for: arrival)
+                    Text(arrival.destinationDisplay)
+                    Spacer()
+                    countdown(for: arrival)
+                    if showsChevron { chevron }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            spokenArrival(
+                line: arrival.lineRef,
+                destination: arrival.destinationDisplay,
+                departure: arrival.expectedDepartureDate
+            ))
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.forward")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
     }
 
     /// Matches `lineRef` to `route.shortName`; nil falls back to plain text.
