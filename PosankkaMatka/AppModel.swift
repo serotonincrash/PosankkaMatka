@@ -18,12 +18,18 @@ final class AppModel {
     let routes = ResourceStore<[Foli.Route]>()
     let routeDetail: RouteDetailStore
     let vehicles: VehicleStore
+    let stopAlert = StopAlertManager()
 
     private(set) var selection = Selection()
     /// Stops served by a ferry route; drawn with a ferry glyph.
     private(set) var boatStopIDs: Set<Foli.Stop.ID> = []
 
+    /// Directions per route id, for matching a tracked bus to its trip shape.
+    private(set) var directionsByRoute: [String: [RouteDirection]] = [:]
+
     @ObservationIgnored private var routeLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var directionLoads: Set<String> = []
+    @ObservationIgnored private var stopIndex: (count: Int, byID: [Foli.Stop.ID: Foli.Stop]) = (0, [:])
 
     init(client: FoliClient) {
         self.client = client
@@ -52,6 +58,55 @@ final class AppModel {
     /// SIRI `lineRef` is the route's short name, not its id.
     func route(forLine lineRef: String) -> Foli.Route? {
         routes.state.value?.first { $0.shortName == lineRef }
+    }
+
+    /// Rebuilt only when the stop list changes size; journeys look stops up per frame.
+    private var stopsByID: [Foli.Stop.ID: Foli.Stop] {
+        let stops = allStops
+        if stopIndex.count != stops.count {
+            stopIndex = (stops.count, Dictionary(stops.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }))
+        }
+        return stopIndex.byID
+    }
+
+    // MARK: - Tracked vehicle
+
+    /// The vehicle card's trip status; nil unless a vehicle card is on top.
+    func tripStatus(at date: Date) -> VehicleTracker.TripStatus? {
+        guard selection.vehicle != nil else { return nil }
+        return vehicles.tripStatus(at: date)
+    }
+
+    /// The top vehicle card's rail, from its live or held position. Nil while
+    /// pending or once the trip has ended or been lost.
+    func journey(at date: Date) -> (journey: VehicleJourney, position: VehicleTracker.Position, lastSeen: Date?)? {
+        let position: VehicleTracker.Position
+        let lastSeen: Date?
+        switch tripStatus(at: date) {
+        case .live(let p): position = p; lastSeen = nil
+        case .stale(let p, let seen): position = p; lastSeen = seen
+        default: return nil
+        }
+        let directions = route(forLine: position.vehicle.lineRef).flatMap { directionsByRoute[$0.id] } ?? []
+        let journey = VehicleJourney(
+            vehicle: position.vehicle,
+            direction: directions.bestMatch(for: position.vehicle),
+            stops: stopsByID
+        )
+        return (journey, position, lastSeen)
+    }
+
+    /// Loads (once) the directions of the line a tracked bus runs on.
+    private func loadDirections(forLine lineRef: String) {
+        guard let route = route(forLine: lineRef),
+              directionsByRoute[route.id] == nil,
+              directionLoads.insert(route.id).inserted else { return }
+        let client = client
+        Task {
+            let loaded = try? await RouteDirection.load(routeId: route.id, client: client)
+            directionLoads.remove(route.id)
+            if let loaded { directionsByRoute[route.id] = loaded }
+        }
     }
 
     // MARK: - Selection
@@ -105,25 +160,17 @@ final class AppModel {
         updateVehicleMonitoring()
     }
 
-    /// Polls for the topmost stop or route card; none when closed.
+    /// Polls for the top card: a vehicle tracks just its trip; none when closed.
     private func updateVehicleMonitoring() {
-        // PHASE2: a vehicle on top should use `.trip(key)` once VehicleTracker
-        // has it; until then it keeps the scope of the card it was opened from.
-        for card in selection.cards.reversed() {
-            switch card {
-            case .stop(let stop):
-                vehicles.start(.stop(stop.id))
-                return
-            case .route(let route):
-                vehicles.start(.line(route.shortName))
-                return
-            case .vehicle:
-                continue
-            }
-        }
-        if let key = selection.vehicle {
-            vehicles.start(.line(key.lineRef))
-        } else {
+        switch selection.top {
+        case .stop(let stop):
+            vehicles.start(.stop(stop.id))
+        case .route(let route):
+            vehicles.start(.line(route.shortName))
+        case .vehicle(let key):
+            vehicles.start(.trip(key))
+            loadDirections(forLine: key.lineRef)
+        case nil:
             vehicles.stopMonitoring()
         }
     }

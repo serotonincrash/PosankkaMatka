@@ -20,6 +20,8 @@ struct PosankkaMatkaApp: App {
         WindowGroup {
             HomeView()
                 .environment(model)
+                // A geofence hit can relaunch the app; reattach before it's delivered.
+                .task { await model.stopAlert.resume() }
         }
     }
 }

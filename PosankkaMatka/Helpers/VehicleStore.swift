@@ -21,6 +21,9 @@ final class VehicleStore {
     private(set) var lastError: Foli.APIError?
     /// Suspends fetching (e.g. backgrounded) without dropping the scope.
     var isPaused = false
+    /// The last successful full-network poll, unscoped; matches arrivals to buses.
+    private(set) var latestVehicles: [Foli.VehicleLocation] = []
+    private var latestFetchedAt: Date?
 
     private let client: FoliClient
     private var tracker: VehicleTracker?
@@ -34,7 +37,13 @@ final class VehicleStore {
     func start(_ scope: VehicleTracker.Scope) {
         guard tracker?.scope != scope else { return }
         pollTask?.cancel()
-        tracker = VehicleTracker(scope: scope, interval: Self.pollSeconds)
+        var tracker = VehicleTracker(scope: scope, interval: Self.pollSeconds)
+        // Seed from the last poll so a new scope (e.g. a trip) isn't empty or
+        // pending for a whole interval.
+        if let latestFetchedAt, Date().timeIntervalSince(latestFetchedAt) < Self.pollSeconds * 2 {
+            tracker.update(with: latestVehicles, at: latestFetchedAt)
+        }
+        self.tracker = tracker
         pollTask = Task { await poll() }
     }
 
@@ -49,13 +58,21 @@ final class VehicleStore {
         tracker?.positions(at: date) ?? []
     }
 
+    /// Nil unless polling a `.trip` scope.
+    func tripStatus(at date: Date) -> VehicleTracker.TripStatus? {
+        tracker?.tripStatus(at: date)
+    }
+
     private func poll() async {
         while !Task.isCancelled {
             if !isPaused {
                 do {
                     let fetched = try await client.fetchVehicleLocations()
                     guard !Task.isCancelled else { return }
-                    tracker?.update(with: fetched, at: Date())
+                    let now = Date()
+                    latestVehicles = fetched
+                    latestFetchedAt = now
+                    tracker?.update(with: fetched, at: now)
                     lastError = nil
                 } catch is CancellationError {
                     return
