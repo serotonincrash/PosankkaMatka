@@ -69,7 +69,8 @@ private struct VehicleCardContent: View {
             } else if ending == nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List { Section { header(nil, lastSeen: nil) } }
+                List { Section { header(nil) } }
+                    .safeAreaInset(edge: .top, spacing: 0) { statusLine(nil, lastSeen: nil) }
             }
         }
         .onChange(of: tracked?.position.vehicle, initial: true) { _, _ in
@@ -136,7 +137,7 @@ private struct VehicleCardContent: View {
         return ScrollViewReader { proxy in
             List {
                 Section {
-                    header(journey, lastSeen: lastSeen)
+                    header(journey)
                 }
                 Section {
                     ForEach(journey.calls) { call in
@@ -148,6 +149,9 @@ private struct VehicleCardContent: View {
                 }
             }
             .listStyle(.plain)
+            // Pinned: auto-scroll to the current stop would push freshness and
+            // the ending banner off-screen.
+            .safeAreaInset(edge: .top, spacing: 0) { statusLine(journey, lastSeen: lastSeen) }
             .onScrollPhaseChange { _, phase in
                 if phase == .interacting { userScrolled = true }
             }
@@ -244,35 +248,48 @@ private struct VehicleCardContent: View {
 
     // MARK: - Header
 
-    private func header(_ journey: VehicleJourney?, lastSeen: Date?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                if let route { RouteBadge(route: route) }
-                VStack(alignment: .leading, spacing: 2) {
-                    if let destination = journey?.destinationName {
-                        Text(destination).font(.headline)
-                    }
-                    if let delay = journey?.delay, ending == nil {
-                        delayText(delay)
-                            .font(.subheadline)
-                            .foregroundStyle(delay >= 60 ? .orange : .secondary)
-                    }
-                }
-            }
-            .accessibilityElement(children: .combine)
-            if ending != nil {
-                Label(endingText, systemImage: isEnded ? "flag.checkered" : "antenna.radiowaves.left.and.right.slash")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.thinMaterial, in: .rect(cornerRadius: 10))
-            } else if let lastSeen {
-                Text("Updated \(Text(lastSeen, format: .relative(presentation: .named)))")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+    private func header(_ journey: VehicleJourney?) -> some View {
+        HStack(spacing: 12) {
+            if let route { RouteBadge(route: route) }
+            if let destination = journey?.destinationName {
+                Text(destination).font(.headline)
             }
         }
+        .accessibilityElement(children: .combine)
         .listRowSeparator(.hidden)
+    }
+
+    /// Delay and freshness, or the ending banner, above the scrolling rail.
+    @ViewBuilder
+    private func statusLine(_ journey: VehicleJourney?, lastSeen: Date?) -> some View {
+        if ending != nil {
+            Label(endingText, systemImage: isEnded ? "flag.checkered" : "antenna.radiowaves.left.and.right.slash")
+                .font(.subheadline.weight(.semibold))
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial, in: .rect(cornerRadius: 10))
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+        } else if journey?.delay != nil || lastSeen != nil {
+            HStack(spacing: 6) {
+                if let delay = journey?.delay {
+                    delayText(delay)
+                        .foregroundStyle(delay >= 60 ? .orange : .secondary)
+                }
+                if journey?.delay != nil, lastSeen != nil {
+                    Text(verbatim: "·").foregroundStyle(.secondary).accessibilityHidden(true)
+                }
+                if let lastSeen {
+                    Text("Updated \(Text(lastSeen, format: .relative(presentation: .named)))")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.subheadline)
+            .padding(.horizontal)
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private func delayText(_ delay: TimeInterval) -> Text {
