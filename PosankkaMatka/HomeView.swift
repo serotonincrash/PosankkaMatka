@@ -482,7 +482,7 @@ private struct FollowBusButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Follow Bus")
-        .accessibilityHint(isFollowing ? "" : "Keeps the map centered on the bus")
+        .accessibilityHint(isFollowing ? Text(verbatim: "") : Text("Keeps the map centered on the bus"))
         .accessibilityAddTraits(isFollowing ? .isSelected : [])
     }
 }
