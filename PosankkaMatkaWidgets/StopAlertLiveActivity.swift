@@ -101,7 +101,7 @@ private struct StatusLine: View {
     }
 
     private var delayText: Text {
-        guard let delay = context.state.delaySeconds, abs(delay) >= 60 else { return Text("") }
+        guard let delay = context.state.delaySeconds, abs(delay) >= 60 else { return Text(verbatim: "") }
         let minutes = abs(delay) / 60
         return delay > 0 ? Text(" · \(minutes) min late") : Text(" · \(minutes) min early")
     }
