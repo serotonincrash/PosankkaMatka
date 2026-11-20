@@ -274,6 +274,17 @@
         }
       }
     },
+    "Available when the trip starts at %@" : {
+      "comment" : "Stop card, disabled Track Bus menu item subtitle: the arrival's trip hasn't started yet. The argument is the trip's start time.",
+      "localizations" : {
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Käytettävissä, kun vuoro lähtee klo %@"
+          }
+        }
+      }
+    },
     "Bus %@" : {
       "comment" : "VoiceOver label for a bus on the map with no known destination. The argument is the line number.",
       "localizations" : {
@@ -343,6 +354,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Bussi %1$@, suunta %2$@"
+          }
+        }
+      }
+    },
+    "Can't be tracked, no live position for this bus" : {
+      "comment" : "VoiceOver hint for an arrival whose bus isn't in the live feed.",
+      "localizations" : {
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ei seurattavissa, bussin sijaintia ei ole saatavilla"
           }
         }
       }
@@ -624,6 +646,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ei saapuvia"
+          }
+        }
+      }
+    },
+    "No live position for this bus" : {
+      "comment" : "Stop card, disabled Track Bus menu item subtitle: the trip has started but the bus isn't in the live feed.",
+      "localizations" : {
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bussin sijaintia ei ole saatavilla"
           }
         }
       }
@@ -1004,6 +1037,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Seuraa bussia"
+          }
+        }
+      }
+    },
+    "Tracking available when the trip starts at %@" : {
+      "comment" : "VoiceOver hint for an arrival whose trip hasn't started. The argument is the trip's start time.",
+      "localizations" : {
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seuranta on käytettävissä, kun vuoro lähtee klo %@"
           }
         }
       }

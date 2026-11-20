@@ -104,7 +104,8 @@ struct StopView: View {
     }
 
     /// A row whose bus is live (`trip` non-nil) opens its vehicle card; others
-    /// stay plain. `trip` refreshes with each vehicle poll, between arrival fetches.
+    /// stay plain, with a disabled menu item saying why. `trip` refreshes with
+    /// each vehicle poll, between arrival fetches.
     @ViewBuilder
     private func arrivalRow(_ arrival: Foli.Arrival, trip: TripKey?) -> some View {
         if let trip {
@@ -121,7 +122,20 @@ struct StopView: View {
                 // "Notify Me" goes here once stop alerts reach arrival rows.
             }
         } else {
+            let start = Date(timeIntervalSince1970: arrival.originAimedDepartureTime)
+            let reason = start <= .now
+                ? Text("No live position for this bus")
+                : Text("Available when the trip starts at \(start, format: .dateTime.hour().minute())")
             arrivalContent(arrival, showsChevron: false)
+                .accessibilityHint(reason)
+                .contextMenu {
+                    Button {} label: {
+                        Image(systemName: "bus")
+                        Text("Track Bus")
+                        reason
+                    }
+                    .disabled(true)
+                }
         }
     }
 
