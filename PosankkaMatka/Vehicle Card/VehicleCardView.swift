@@ -40,7 +40,6 @@ private struct VehicleCardContent: View {
     @State private var ending: Ending?
     /// Shown after the trip ends or is lost, when the tracker no longer has the bus.
     @State private var lastJourney: VehicleJourney?
-    @State private var userScrolled = false
 
     private var tracked: (journey: VehicleJourney, position: VehicleTracker.Position, lastSeen: Date?)? {
         guard let tracked = model.journey(at: now), tracked.journey.trip.vehicleRef == key.vehicleRef else { return nil }
@@ -65,12 +64,17 @@ private struct VehicleCardContent: View {
         let journey = tracked?.journey ?? lastJourney
         Group {
             if let journey {
-                rail(journey, lastSeen: tracked?.lastSeen)
+                rail(journey)
             } else if ending == nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List { Section { header(nil) } }
-                    .safeAreaInset(edge: .top, spacing: 0) { statusLine(nil, lastSeen: nil) }
+                endingBanner
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                title(journey, lastSeen: tracked?.lastSeen)
             }
         }
         .onChange(of: tracked?.position.vehicle, initial: true) { _, _ in
@@ -132,13 +136,10 @@ private struct VehicleCardContent: View {
 
     // MARK: - Rail
 
-    private func rail(_ journey: VehicleJourney, lastSeen: Date?) -> some View {
+    private func rail(_ journey: VehicleJourney) -> some View {
         let slices = RailSlice.slices(for: journey, allPassed: isEnded)
         return ScrollViewReader { proxy in
             List {
-                Section {
-                    header(journey)
-                }
                 Section {
                     ForEach(journey.calls) { call in
                         row(call, slice: slices[call.id], journey: journey)
@@ -149,15 +150,16 @@ private struct VehicleCardContent: View {
                 }
             }
             .listStyle(.plain)
-            // Pinned: auto-scroll to the current stop would push freshness and
-            // the ending banner off-screen.
-            .safeAreaInset(edge: .top, spacing: 0) { statusLine(journey, lastSeen: lastSeen) }
-            .onScrollPhaseChange { _, phase in
-                if phase == .interacting { userScrolled = true }
-            }
-            .onChange(of: journey.nextStopIndex, initial: true) { _, index in
-                guard !userScrolled, ending == nil, let index else { return }
-                withAnimation { proxy.scrollTo(index, anchor: .center) }
+            // Pinned above the rail, which may be scrolled to the current stop.
+            .safeAreaInset(edge: .top, spacing: 0) { endingBanner }
+            // Not per stop, which fights the user's scrolling: on open, and again
+            // when the trip loads and prepends its earlier stops (the list would
+            // otherwise sit at the route's start).
+            .task(id: journey.calls.first?.state == .passed) {
+                // A scroll in onAppear lands before the list's first layout and is dropped.
+                await Task.yield()
+                guard ending == nil, let index = journey.nextStopIndex else { return }
+                proxy.scrollTo(index, anchor: .center)
             }
         }
     }
@@ -256,22 +258,47 @@ private struct VehicleCardContent: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Title
 
-    private func header(_ journey: VehicleJourney?) -> some View {
-        HStack(spacing: 12) {
-            if let route { RouteBadge(route: route) }
-            if let destination = journey?.destinationName {
-                Text(destination).font(.headline)
+    /// Badge and destination over a far-behind warning and freshness, in the nav bar so the
+    /// rail scrolls under the bar's edge effect rather than under bare text.
+    private func title(_ journey: VehicleJourney?, lastSeen: Date?) -> some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                if let route { RouteBadge(route: route) }
+                if let destination = journey?.destinationName {
+                    Text(destination).font(.headline).lineLimit(1)
+                }
+            }
+            let farBehind = isFarBehind(journey)
+            if ending == nil, farBehind || lastSeen != nil {
+                HStack(spacing: 4) {
+                    if farBehind {
+                        Label("Far behind schedule", systemImage: "exclamationmark.triangle.fill")
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(.orange)
+                            // The parked bus shows on the map; say it for VoiceOver.
+                            .accessibilityLabel("Far behind schedule, may not be in service")
+                    }
+                    if farBehind, lastSeen != nil {
+                        Text(verbatim: "·").foregroundStyle(.secondary).accessibilityHidden(true)
+                    }
+                    if let lastSeen {
+                        Text("Updated \(Text(lastSeen, format: .relative(presentation: .named)))")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.caption)
+                .lineLimit(1)
             }
         }
         .accessibilityElement(children: .combine)
-        .listRowSeparator(.hidden)
+        .accessibilityAddTraits(.isHeader)
     }
 
-    /// Delay and freshness, or the ending banner, above the scrolling rail.
+    /// Trip ended or lost, above the rail.
     @ViewBuilder
-    private func statusLine(_ journey: VehicleJourney?, lastSeen: Date?) -> some View {
+    private var endingBanner: some View {
         if ending != nil {
             Label(endingText, systemImage: isEnded ? "flag.checkered" : "antenna.radiowaves.left.and.right.slash")
                 .font(.subheadline.weight(.semibold))
@@ -280,32 +307,15 @@ private struct VehicleCardContent: View {
                 .background(.thinMaterial, in: .rect(cornerRadius: 10))
                 .padding(.horizontal)
                 .padding(.bottom, 8)
-        } else if journey?.delay != nil || lastSeen != nil {
-            HStack(spacing: 6) {
-                if let delay = journey?.delay {
-                    delayText(delay)
-                        .foregroundStyle(delay >= 60 ? .orange : .secondary)
-                }
-                if journey?.delay != nil, lastSeen != nil {
-                    Text(verbatim: "·").foregroundStyle(.secondary).accessibilityHidden(true)
-                }
-                if let lastSeen {
-                    Text("Updated \(Text(lastSeen, format: .relative(presentation: .named)))")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .font(.subheadline)
-            .padding(.horizontal)
-            .padding(.bottom, 6)
-            .accessibilityElement(children: .combine)
         }
     }
 
-    private func delayText(_ delay: TimeInterval) -> Text {
-        let minutes = Int((abs(delay) / 60).rounded())
-        if minutes == 0 { return Text("On time") }
-        return delay > 0 ? Text("\(minutes) min late") : Text("\(minutes) min early")
+    /// Past this the bus usually isn't running the trip (parked, or the feed
+    /// is stale); smaller delays are already in the rail's ETAs.
+    private static let farBehindDelay: TimeInterval = 30 * 60
+
+    private func isFarBehind(_ journey: VehicleJourney?) -> Bool {
+        (journey?.delay ?? 0) >= Self.farBehindDelay
     }
 
     // MARK: - Stop alert
