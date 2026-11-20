@@ -32,10 +32,8 @@ struct HomeView: View {
     @State private var lastMarkerRegion: MKCoordinateRegion?
     /// Read here only outside `body`, so detent drags don't re-render the map.
     @State private var sheetModel = SheetModel()
-    /// The camera tracks the vehicle card's bus until the user moves the map.
-    @State private var isFollowing = false
-    /// Per-tick follow bookkeeping; a plain class so writes don't re-render.
-    @State private var follow = FollowState()
+    /// Bus framing bookkeeping; a plain class so per-tick writes don't re-render.
+    @State private var busFraming = BusFraming()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -70,14 +68,15 @@ struct HomeView: View {
                     updateDisplayedStops(for: context.region)
                 }
                 .onChange(of: context.date) {
-                    followTick(tracked?.position.coordinate.toCLCoordinate())
+                    busTick(tracked?.position.coordinate.toCLCoordinate())
                 }
             }
             .onChange(of: scenePhase) { _, phase in
                 model.vehicles.isPaused = phase != .active
             }
             .onChange(of: camera.positionedByUser) { _, byUser in
-                if byUser { isFollowing = false }
+                // Don't yank the map if the bus's first fix lands after a pan.
+                if byUser { busFraming.needsFraming = false }
             }
             .onChange(of: model.selection.vehicle) { _, key in
                 vehicleCardChanged(to: key)
@@ -90,7 +89,7 @@ struct HomeView: View {
                 }
                 .accessibilityHidden(true)
                 if model.selection.vehicle != nil {
-                    FollowBusButton(isFollowing: isFollowing, action: resumeFollowing)
+                    CenterOnBusButton(action: centerOnBus)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -142,14 +141,15 @@ struct HomeView: View {
         )
     }
 
-    // MARK: - Follow camera
+    // MARK: - Bus framing
 
     /// Street-level distance (m) for a bus framed from further out.
-    private static let followDistance: Double = 2_500
+    private static let busDistance: Double = 2_500
 
+    /// Frames the bus once when its card opens; the map doesn't follow it.
     private func vehicleCardChanged(to key: TripKey?) {
         guard key != nil else {
-            isFollowing = false
+            busFraming.needsFraming = false
             return
         }
         // Opened from a puck or a stop card's arrival: either way at .medium.
@@ -157,33 +157,26 @@ struct HomeView: View {
             sheetModel.suppressDetentReframe = true
             sheetModel.cardDetent = .medium
         }
-        isFollowing = true
-        follow.distance = min(liveCamera?.distance ?? Self.followDistance, Self.followDistance)
-        follow.needsFraming = true
-        followTick(model.journey(at: .now)?.position.coordinate.toCLCoordinate())
+        busFraming.distance = min(liveCamera?.distance ?? Self.busDistance, Self.busDistance)
+        busFraming.needsFraming = true
+        busTick(model.journey(at: .now)?.position.coordinate.toCLCoordinate())
     }
 
-    private func followTick(_ coordinate: CLLocationCoordinate2D?) {
+    /// Records the bus's position; frames it if a framing is pending (the
+    /// first fix can land a few ticks after the card opens).
+    private func busTick(_ coordinate: CLLocationCoordinate2D?) {
         guard let coordinate else { return }
-        follow.lastCoordinate = coordinate
-        guard isFollowing else { return }
-        let nudge = (1 - visibleFraction(for: sheetModel.cardDetent)) / 2
-        if follow.needsFraming {
-            follow.needsFraming = false
-            moveCamera(anchor: coordinate, nudge: nudge, distance: follow.distance,
-                       animation: .easeInOut(duration: 0.4))
-        } else {
-            // Linear over one tick, so per-tick moves join into one glide.
-            moveCamera(anchor: coordinate, nudge: nudge, distance: follow.distance,
-                       animation: .linear(duration: 0.5))
-        }
+        busFraming.lastCoordinate = coordinate
+        guard busFraming.needsFraming else { return }
+        busFraming.needsFraming = false
+        moveCamera(anchor: coordinate, nudge: (1 - visibleFraction(for: sheetModel.cardDetent)) / 2,
+                   distance: busFraming.distance, animation: .easeInOut(duration: 0.4))
     }
 
-    private func resumeFollowing() {
-        isFollowing = true
-        follow.distance = liveCamera?.distance ?? Self.followDistance
-        follow.needsFraming = true
-        followTick(follow.lastCoordinate)
+    private func centerOnBus() {
+        busFraming.distance = liveCamera?.distance ?? Self.busDistance
+        busFraming.needsFraming = true
+        busTick(busFraming.lastCoordinate)
     }
 
     // MARK: - Selection
@@ -239,7 +232,7 @@ struct HomeView: View {
         guard ref != model.selection.vehicle?.vehicleRef,
               let vehicle = model.vehicles.displayVehicles(at: .now).first(where: { $0.id == ref })?.vehicle
         else { return }
-        // Detent and follow camera are set up in `vehicleCardChanged`.
+        // Detent and bus framing are set up in `vehicleCardChanged`.
         model.selectVehicle(TripKey(vehicle))
     }
 
@@ -311,11 +304,8 @@ struct HomeView: View {
                   )?.center
             else { return }
             anchor = center
-        case .vehicle:
-            // Re-seat the followed bus for the new inset; unfollowed, leave the map alone.
-            guard isFollowing, let coordinate = follow.lastCoordinate else { return }
-            anchor = coordinate
-        case nil:
+        case .vehicle, nil:
+            // A vehicle card's bus has moved on since it was framed; the button re-centers.
             return
         }
         let nudge = (1 - visibleFraction(for: sheetModel.cardDetent)) / 2
@@ -415,7 +405,7 @@ struct HomeView: View {
 
     private func recenterOnUser() {
         guard model.location.isAuthorized, let coordinate = model.location.currentLocation else { return }
-        isFollowing = false
+        busFraming.needsFraming = false
         let detent = !model.selection.isEmpty ? sheetModel.cardDetent : sheetModel.listDetent
         moveCamera(anchor: coordinate, nudge: (1 - visibleFraction(for: detent)) / 2)
     }
@@ -450,23 +440,22 @@ private struct MapLocateButton: View {
     }
 }
 
-private final class FollowState {
+private final class BusFraming {
     var lastCoordinate: CLLocationCoordinate2D?
     var distance: Double = 2_500
-    /// The next tick frames (zooms) rather than glides.
+    /// The next tick with a position frames the bus.
     var needsFraming = false
 }
 
-/// Resumes following the vehicle card's bus after the user moved the map.
-private struct FollowBusButton: View {
-    let isFollowing: Bool
+/// Re-centers the map on the vehicle card's bus.
+private struct CenterOnBusButton: View {
     let action: () -> Void
     @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
 
     private var label: some View {
-        Image(systemName: isFollowing ? "scope" : "location.viewfinder")
+        Image(systemName: "location.viewfinder")
             .font(.body.weight(.semibold))
-            .foregroundStyle(isFollowing ? Color.accentColor : Color.primary)
+            .foregroundStyle(Color.primary)
             .frame(width: buttonSize, height: buttonSize)
     }
 
@@ -481,9 +470,7 @@ private struct FollowBusButton: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Follow Bus")
-        .accessibilityHint(isFollowing ? Text(verbatim: "") : Text("Keeps the map centered on the bus"))
-        .accessibilityAddTraits(isFollowing ? .isSelected : [])
+        .accessibilityLabel("Center on Bus")
     }
 }
 
