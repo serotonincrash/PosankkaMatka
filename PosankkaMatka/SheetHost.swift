@@ -96,6 +96,9 @@ struct SheetHost: View {
             }
         }
         .presentationDetents([SheetModel.peek, .medium, .large], selection: $sheetModel.cardDetent)
+        // Swipes on the content scroll it; the grabber and nav bar resize the
+        // card. The default resizes first, so swiping a rail at .medium grew the card.
+        .presentationContentInteraction(.scrolls)
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled()
