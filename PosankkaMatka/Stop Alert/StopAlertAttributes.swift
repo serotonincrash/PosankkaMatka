@@ -17,20 +17,22 @@ nonisolated struct StopAlertAttributes: ActivityAttributes, Hashable {
         /// When `eta` was read; also the countdown's lower bound.
         var updatedAt: Date
         var nextStopName: String?
-        /// Positive is late.
-        var delaySeconds: Int?
         /// The rider's own location reached the stop.
         var hasArrived: Bool = false
+        /// The bus reached the stop or left its feed; the session is over.
+        var busPassed: Bool = false
         /// Device to stop, straight line; nil without a fix.
         var distanceMeters: Double?
         /// Walk to the stop, with the street detour; nil without a fix.
         var walkingMinutes: Int?
 
-        /// The countdown no longer means much past the ETA, nor once the
-        /// estimate has gone unrefreshed for a while.
-        var staleDate: Date {
-            min(eta.addingTimeInterval(120), updatedAt.addingTimeInterval(600))
-        }
+        /// The countdown no longer means much once the estimate has gone
+        /// unrefreshed for a while.
+        var estimateExpiry: Date { updatedAt.addingTimeInterval(600) }
+
+        /// At the ETA too, so the widget re-renders and swaps the finished
+        /// countdown for "Now".
+        var staleDate: Date { min(eta, estimateExpiry) }
     }
 
     /// Published line name, e.g. "15".

@@ -20,7 +20,7 @@ struct StopAlertLiveActivity: Widget {
                     LineBadge(attributes: context.attributes)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Countdown(state: context.state)
+                    Countdown(context: context)
                         .font(.title3.weight(.semibold))
                         .multilineTextAlignment(.trailing)
                 }
@@ -35,10 +35,16 @@ struct StopAlertLiveActivity: Widget {
             } compactLeading: {
                 LineBadge(attributes: context.attributes)
             } compactTrailing: {
-                Countdown(state: context.state)
+                Countdown(context: context)
                     .frame(maxWidth: 52)
             } minimal: {
-                LineBadge(attributes: context.attributes, compact: true)
+                // A full badge doesn't fit; the line number in its colour does.
+                Text(context.attributes.lineName)
+                    .font(.caption2.weight(.bold).monospaced())
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .foregroundStyle(Color(hex: context.attributes.lineColorHex) ?? .accentColor)
+                    .accessibilityLabel("Line \(context.attributes.lineName)")
             }
             .keylineTint(Color(hex: context.attributes.lineColorHex) ?? .accentColor)
         }
@@ -58,14 +64,14 @@ private struct LockScreenView: View {
                 StatusLine(context: context)
             }
             Spacer(minLength: 8)
-            Countdown(state: context.state)
+            Countdown(context: context)
                 .font(.title2.weight(.semibold))
                 .multilineTextAlignment(.trailing)
         }
     }
 }
 
-/// The rider's distance to the stop and delay, or why the countdown can't be trusted.
+/// The rider's distance to the stop, or why the countdown can't be trusted.
 private struct StatusLine: View {
     let context: ActivityViewContext<StopAlertAttributes>
 
@@ -73,14 +79,14 @@ private struct StatusLine: View {
         Group {
             if context.state.hasArrived {
                 Text("Your stop is coming up")
-            } else if context.isStale {
+            } else if context.state.busPassed {
+                Text("The bus has passed the stop")
+            } else if context.isStale, Date.now >= context.state.estimateExpiry {
                 Text("Last updated \(context.state.updatedAt, style: .time)")
             } else if let distance = distanceText {
-                distance + delayText
+                distance
             } else if let next = context.state.nextStopName {
-                Text("Next: \(next)") + delayText
-            } else {
-                delayText
+                Text("Next: \(next)")
             }
         }
         .font(.subheadline)
@@ -99,45 +105,42 @@ private struct StatusLine: View {
         }
         return Text("You're \(distance) away")
     }
-
-    private var delayText: Text {
-        guard let delay = context.state.delaySeconds, abs(delay) >= 60 else { return Text(verbatim: "") }
-        let minutes = abs(delay) / 60
-        return delay > 0 ? Text(" · \(minutes) min late") : Text(" · \(minutes) min early")
-    }
 }
 
 private struct Countdown: View {
-    let state: StopAlertAttributes.ContentState
+    let context: ActivityViewContext<StopAlertAttributes>
+
+    private var state: StopAlertAttributes.ContentState { context.state }
 
     var body: some View {
         if state.hasArrived {
             Image(systemName: "bell.fill")
                 .accessibilityLabel("Arriving")
+        } else if state.busPassed {
+            Image(systemName: "checkmark")
+                .accessibilityLabel("Passed")
+        } else if context.isStale, Date.now >= state.eta {
+            // The staleDate includes the ETA, so this re-renders when the timer runs out.
+            Text("Now")
         } else {
-            // A range can't run backwards, and a past ETA would read 0:00.
+            // A range can't run backwards.
             Text(timerInterval: min(state.updatedAt, state.eta)...state.eta, countsDown: true)
                 .monospacedDigit()
         }
     }
 }
 
-/// Same idiom as the app's `RouteBadge`.
+/// The app's `RouteBadge`, fed from the attributes.
 private struct LineBadge: View {
     let attributes: StopAlertAttributes
-    var compact = false
 
     var body: some View {
-        Text(attributes.lineName)
-            .font((compact ? Font.caption2 : .subheadline).weight(.bold).monospaced())
-            .minimumScaleFactor(0.6)
-            .lineLimit(1)
-            .foregroundStyle(Color(hex: attributes.lineTextColorHex) ?? .white)
-            .padding(.horizontal, compact ? 3 : 8)
-            .padding(.vertical, compact ? 2 : 4)
-            .background(Color(hex: attributes.lineColorHex) ?? .accentColor,
-                        in: .rect(cornerRadius: compact ? 4 : 6))
-            .accessibilityLabel("Line \(attributes.lineName)")
+        RouteBadge(
+            name: attributes.lineName,
+            color: Color(hex: attributes.lineColorHex),
+            textColor: Color(hex: attributes.lineTextColorHex)
+        )
+        .accessibilityLabel("Line \(attributes.lineName)")
     }
 }
 
@@ -161,7 +164,8 @@ private extension Color {
     StopAlertLiveActivity()
 } contentStates: {
     StopAlertAttributes.ContentState(eta: .now.addingTimeInterval(420), updatedAt: .now,
-                                     nextStopName: "Puolalanmäki", delaySeconds: 120,
+                                     nextStopName: "Puolalanmäki",
                                      distanceMeters: 600, walkingMinutes: 10)
     StopAlertAttributes.ContentState(eta: .now, updatedAt: .now, hasArrived: true)
+    StopAlertAttributes.ContentState(eta: .now, updatedAt: .now, busPassed: true)
 }

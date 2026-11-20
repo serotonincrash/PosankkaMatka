@@ -86,6 +86,7 @@
 		D154750530ACBA71003B33BD /* Exceptions for "PosankkaMatka" folder in "PosankkaMatkaWidgetsExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"Route List & Detail View/RouteBadge.swift",
 				"Stop Alert/StopAlertAttributes.swift",
 			);
 			target = D15474E130ACB8D3003B33BD /* PosankkaMatkaWidgetsExtension */;

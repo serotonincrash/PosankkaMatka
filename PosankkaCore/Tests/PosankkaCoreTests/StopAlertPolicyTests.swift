@@ -64,8 +64,18 @@ private func input(
     #expect(StopAlertPolicy.evaluate(input(at: 3_600, eta: 4_000)).end == .timedOut)
 }
 
-@Test func noFixOnlyChecksEndConditions() {
-    #expect(StopAlertPolicy.evaluate(input(at: 590, distance: nil)) == .init())
+@Test func tooFarToCatchTheBusSkipsLeaveNow() {
+    // 1 km → 1000 s walk > 600 s until the bus.
+    #expect(StopAlertPolicy.evaluate(input(distance: 1_000)) == .init())
+}
+
+@Test func busArrivingFiresAwayFromTheStop() {
+    #expect(StopAlertPolicy.evaluate(input(at: 500, distance: 2_000)).notify == .busArriving)
+}
+
+@Test func noFixStillAnnouncesTheBus() {
+    #expect(StopAlertPolicy.evaluate(input(at: 300, distance: nil)) == .init())
+    #expect(StopAlertPolicy.evaluate(input(at: 590, distance: nil)).notify == .busArriving)
 }
 
 @Test func noETAYetDoesNothingUnlessRiding() {

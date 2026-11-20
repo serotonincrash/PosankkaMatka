@@ -6,7 +6,7 @@ public enum StopAlertPolicy {
     public enum Alert: String, Codable, Sendable, CaseIterable {
         /// Away from the stop, and walking there now only just makes the bus.
         case leaveNow
-        /// Waiting at the stop and the bus is about to arrive.
+        /// The bus is about to reach the stop, wherever the rider is.
         case busArriving
         /// Riding the bus and the stop is close.
         case stopIsNext
@@ -86,10 +86,7 @@ public enum StopAlertPolicy {
         if let eta = input.busETA, input.now.timeIntervalSince(eta) > passedGrace {
             return Outcome(end: .busPassed)
         }
-        guard let distance = input.distance else { return Outcome() }
-
-        let riding = (input.speed ?? 0) >= ridingSpeed
-        if riding {
+        if let distance = input.distance, (input.speed ?? 0) >= ridingSpeed {
             // Riding: the stop's arrival time doesn't matter, only being close.
             if distance <= nextStopRadius, !input.sent.contains(.stopIsNext) {
                 return Outcome(notify: .stopIsNext, end: .arrived)
@@ -99,16 +96,15 @@ public enum StopAlertPolicy {
         guard let eta = input.busETA else { return Outcome() }
         let untilBus = eta.timeIntervalSince(input.now)
 
-        if distance <= atStopRadius {
-            if untilBus <= arrivingWindow, !input.sent.contains(.busArriving) {
-                return Outcome(notify: .busArriving)
+        if let distance = input.distance, distance > atStopRadius, !input.sent.contains(.leaveNow) {
+            let walk = walkingTime(forDistance: distance)
+            // Only while the bus is still catchable; past that it's just noise.
+            if walk <= untilBus, walk + leaveBuffer >= untilBus {
+                return Outcome(notify: .leaveNow)
             }
-            return Outcome()
         }
-        if untilBus > 0,
-           walkingTime(forDistance: distance) + leaveBuffer >= untilBus,
-           !input.sent.contains(.leaveNow) {
-            return Outcome(notify: .leaveNow)
+        if untilBus <= arrivingWindow, !input.sent.contains(.busArriving) {
+            return Outcome(notify: .busArriving)
         }
         return Outcome()
     }

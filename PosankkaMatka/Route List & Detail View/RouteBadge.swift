@@ -4,13 +4,17 @@
 //
 //  Created by sero on 7/22/26.
 //
+//  Shared with the widget extension: SwiftUI only. `init(route:)` lives in
+//  RouteBadge+Route.swift, since the widget doesn't link FoliBusUI.
+//
 
 import SwiftUI
-import FoliBusUI
 
 /// A route's colored line-number badge, at least three characters wide.
 struct RouteBadge: View {
-    let route: Foli.Route
+    let name: String
+    var color: Color?
+    var textColor: Color?
 
     /// Shared so the hidden reference and visible text measure the same.
     private var badgeFont: Font { .subheadline.weight(.bold).monospaced() }
@@ -25,19 +29,12 @@ struct RouteBadge: View {
             Text("000")
                 .font(badgeFont)
                 .hidden()
-            Text(route.shortName)
+            Text(name)
                 .font(badgeFont)
-                .foregroundStyle(route.textColor ?? .white)
+                .foregroundStyle(textColor ?? .white)
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
-        .background(route.color ?? .accentColor, in: .rect(cornerRadius: cornerRadius))
+        .background(color ?? .accentColor, in: .rect(cornerRadius: cornerRadius))
     }
-}
-
-#Preview {
-    RouteBadge(route: Foli.Route(
-        id: "1", shortName: "15", longName: "Kauppatori–Länsikeskus",
-        type: 3, colorHex: "007AC9", textColorHex: "FFFFFF"
-    ))
 }

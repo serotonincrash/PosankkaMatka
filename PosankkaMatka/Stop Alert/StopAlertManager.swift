@@ -42,6 +42,9 @@ final class StopAlertManager {
     private static let fixMaxAge: TimeInterval = 120
     /// Consecutive misses before the trip counts as gone from the stop feed.
     private static let missesToConfirm = 2
+    /// Whatever is due this soon after setting the alert is on the rider's
+    /// screen already; it's marked sent without a notification.
+    private static let setupGrace: TimeInterval = 15
     private static let geofenceRadius: CLLocationDistance = 350
     private static let monitorName = "StopAlert"
     private static let conditionID = "stop"
@@ -101,12 +104,11 @@ final class StopAlertManager {
 
     /// Feeds the vehicle card's estimate while it's on screen; fresher than
     /// the 30 s stop-feed poll.
-    func update(eta: Date, nextStopName: String?, delaySeconds: Int?, at now: Date = .now) async {
+    func update(eta: Date, nextStopName: String?, at now: Date = .now) async {
         guard var alert = active, !alert.state.hasArrived else { return }
         alert.state.eta = eta
         alert.state.updatedAt = now
         alert.state.nextStopName = nextStopName
-        alert.state.delaySeconds = delaySeconds
         active = alert
         await evaluate()
     }
@@ -167,7 +169,6 @@ final class StopAlertManager {
             feedMisses = 0
             alert.state.eta = arrival.expectedArrivalDate
             alert.state.updatedAt = .now
-            if let delay = arrival.delay { alert.state.delaySeconds = delay }
             active = alert
         } else if seenInFeed {
             feedMisses += 1
@@ -192,21 +193,26 @@ final class StopAlertManager {
             speed: fix.flatMap { $0.speed >= 0 ? $0.speed : nil },
             sent: alert.sent
         ))
+        var notice: UNNotificationContent?
         if let kind = outcome.notify {
             alert.sent.insert(kind)
-            await notify(kind, alert: alert)
+            if now.timeIntervalSince(alert.sessionStart) >= Self.setupGrace {
+                notice = await notify(kind, alert: alert)
+            }
         }
         active = alert
         persist()
         if let end = outcome.end {
             alert.state.hasArrived = end == .arrived
+            alert.state.busPassed = end == .busPassed
             await tearDown(finalState: alert.state, lingering: end == .arrived ? 5 * 60 : 60)
         } else {
-            await pushActivity(alert.state, now: now)
+            await pushActivity(alert.state, now: now, alerting: notice)
         }
     }
 
-    private func notify(_ kind: StopAlertPolicy.Alert, alert: ActiveAlert) async {
+    /// Posts the notification and returns it, so the Live Activity can pop too.
+    private func notify(_ kind: StopAlertPolicy.Alert, alert: ActiveAlert) async -> UNNotificationContent {
         let line = alert.attributes.lineName
         let stop = alert.attributes.stopName
         let minutes = max(0, Int((alert.state.eta.timeIntervalSinceNow / 60).rounded()))
@@ -232,6 +238,7 @@ final class StopAlertManager {
         try? await UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: "stopAlert.\(kind.rawValue)", content: content, trigger: nil)
         )
+        return content
     }
 
     // MARK: - Geofence fallback
@@ -300,9 +307,14 @@ final class StopAlertManager {
         }
     }
 
-    /// Skips updates that wouldn't change what's on screen.
-    private func pushActivity(_ state: StopAlertAttributes.ContentState, now: Date) async {
-        if let lastPushed, now.timeIntervalSince(lastPushed.at) < 60,
+    /// Skips updates that wouldn't change what's on screen, unless `alerting`
+    /// asks to light up the Dynamic Island or Lock Screen.
+    private func pushActivity(
+        _ state: StopAlertAttributes.ContentState,
+        now: Date,
+        alerting notice: UNNotificationContent? = nil
+    ) async {
+        if notice == nil, let lastPushed, now.timeIntervalSince(lastPushed.at) < 60,
            lastPushed.state.eta == state.eta,
            lastPushed.state.walkingMinutes == state.walkingMinutes,
            lastPushed.state.nextStopName == state.nextStopName,
@@ -310,8 +322,11 @@ final class StopAlertManager {
             return
         }
         lastPushed = (state, now)
+        let alert = notice.map {
+            AlertConfiguration(title: "\($0.title)", body: "\($0.body)", sound: .default)
+        }
         for activity in Activity<StopAlertAttributes>.activities {
-            await activity.update(ActivityContent(state: state, staleDate: state.staleDate))
+            await activity.update(ActivityContent(state: state, staleDate: state.staleDate), alertConfiguration: alert)
         }
     }
 

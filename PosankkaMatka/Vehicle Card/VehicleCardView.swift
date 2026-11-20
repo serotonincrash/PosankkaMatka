@@ -84,14 +84,8 @@ private struct VehicleCardContent: View {
             handle(phase)
         }
         .onChange(of: alertEstimate(in: tracked?.journey)) { _, estimate in
-            guard let estimate, let journey = tracked?.journey else { return }
-            Task {
-                await model.stopAlert.update(
-                    eta: estimate.eta,
-                    nextStopName: estimate.nextStopName,
-                    delaySeconds: journey.delay.map { Int($0) }
-                )
-            }
+            guard let estimate else { return }
+            Task { await model.stopAlert.update(eta: estimate.eta, nextStopName: estimate.nextStopName) }
         }
         .sensoryFeedback(trigger: ending) { _, new in
             if case .ended = new { .success } else { nil }
@@ -359,7 +353,8 @@ private struct VehicleCardContent: View {
               let eta = call.estimatedArrival(delay: journey.delay) else { return }
         let attributes = StopAlertAttributes(
             trip: journey.trip,
-            lineName: journey.trip.lineRef,
+            // The badge's own label, so the activity matches the app.
+            lineName: route?.shortName ?? journey.trip.lineRef,
             route: route,
             destinationName: journey.destinationName,
             stopID: call.stopID,
@@ -369,7 +364,7 @@ private struct VehicleCardContent: View {
         await model.stopAlert.setAlert(
             attributes,
             at: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
-            state: .init(eta: eta, updatedAt: .now, nextStopName: next, delaySeconds: journey.delay.map { Int($0) })
+            state: .init(eta: eta, updatedAt: .now, nextStopName: next)
         )
     }
 }
