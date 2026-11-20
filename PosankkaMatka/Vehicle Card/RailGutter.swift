@@ -17,7 +17,9 @@ struct RailSlice: Equatable {
     /// Travelled share of the half-segment below; nil for the last stop.
     var below: Double?
     var dot: Dot
-    /// The bus marker's height in the row (0 top ... 1 bottom), if it's in this row.
+    /// The bus marker's centre in this row's height (0 top ... 1 bottom). Rows
+    /// next to the bus's row get it beyond 0...1, to draw the part of the
+    /// marker that crosses into them.
     var bus: Double?
 
     /// Slices for every call. A segment's travelled share is 1 into a passed
@@ -44,14 +46,22 @@ struct RailSlice: Equatable {
         }
         guard !allPassed, let current = journey.nextStopIndex,
               case .current(let progress) = calls[current].state else { return slices }
+        let row: Int
+        let position: Double
         if current == 0 {
-            // No segment above the first stop: approach within its top half.
-            slices[0].bus = progress * 0.5
+            // No line above the first stop to place an approach on (often a bus
+            // waiting to start its trip): keep it on the stop.
+            (row, position) = (0, 0.5)
         } else if progress >= 0.5 {
-            slices[current].bus = (progress - 0.5)
+            (row, position) = (current, progress - 0.5)
         } else {
-            slices[current - 1].bus = 0.5 + progress
+            (row, position) = (current - 1, 0.5 + progress)
         }
+        slices[row].bus = position
+        // Each row clips its drawing, so neighbours draw the overhang. Assumes
+        // similar row heights; a mismatch only shifts a sliver of the marker.
+        if row > 0 { slices[row - 1].bus = position + 1 }
+        if row < slices.count - 1 { slices[row + 1].bus = position - 1 }
         return slices
     }
 
@@ -86,6 +96,8 @@ struct RailGutter: View {
         }
         .frame(width: width)
         .frame(maxHeight: .infinity)
+        // Each row draws only its own share of a marker that spans rows.
+        .clipShape(.rect)
         .accessibilityHidden(true)
     }
 
