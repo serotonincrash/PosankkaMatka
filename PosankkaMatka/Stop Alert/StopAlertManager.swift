@@ -360,19 +360,13 @@ final class StopAlertManager {
         monitorTask = nil
         pollTask?.cancel()
         pollTask = nil
-        feed?.stop()
-        feed = nil
         lastFix = nil
         lastPushed = nil
         active = nil
         persist()
 
-        if let monitor { await monitor.remove(Self.conditionID) }
-        backgroundSession?.invalidate()
-        backgroundSession = nil
-        serviceSession?.invalidate()
-        serviceSession = nil
-
+        // Before the location session goes: in the background it's what keeps
+        // the app running, and without it the end waits for the next launch.
         for activity in Activity<StopAlertAttributes>.activities {
             if let finalState {
                 await activity.end(
@@ -383,6 +377,14 @@ final class StopAlertManager {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
+
+        feed?.stop()
+        feed = nil
+        if let monitor { await monitor.remove(Self.conditionID) }
+        backgroundSession?.invalidate()
+        backgroundSession = nil
+        serviceSession?.invalidate()
+        serviceSession = nil
     }
 
     // MARK: - Persistence
