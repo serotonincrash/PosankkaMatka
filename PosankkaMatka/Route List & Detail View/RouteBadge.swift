@@ -18,7 +18,6 @@ struct RouteBadge: View {
 
     /// Shared so the hidden reference and visible text measure the same.
     private var badgeFont: Font { .subheadline.weight(.bold).monospaced() }
-    /// Scale with Dynamic Type.
     @ScaledMetric(relativeTo: .subheadline) private var hPadding: CGFloat = 8
     @ScaledMetric(relativeTo: .subheadline) private var vPadding: CGFloat = 4
     @ScaledMetric(relativeTo: .subheadline) private var cornerRadius: CGFloat = 6

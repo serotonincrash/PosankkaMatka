@@ -15,7 +15,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate  {
     private(set) var isAuthorized: Bool = false
 
     @ObservationIgnored
-    var locationManager: CLLocationManager = CLLocationManager()
+    private let locationManager = CLLocationManager()
 
     override init() {
         super.init()
@@ -34,10 +34,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate  {
                 currentLocation = locationManager.location?.coordinate
             }
             locationManager.startUpdatingLocation()
-        case .notDetermined, .restricted, .denied:
-            isAuthorized = false
-            locationManager.stopUpdatingLocation()
-        @unknown default:
+        default:
             isAuthorized = false
             locationManager.stopUpdatingLocation()
         }

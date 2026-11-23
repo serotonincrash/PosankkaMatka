@@ -20,7 +20,7 @@ struct StopView: View {
 
     var body: some View {
         Group {
-            switch (arrivalsStore.state) {
+            switch arrivalsStore.state {
             case .loading:
                 ProgressView()
             case .success(let arrivals):
@@ -33,8 +33,8 @@ struct StopView: View {
                             .padding(.horizontal)
                             .background(.yellow.opacity(0.15))
                     }
-                    if arrivals.count == 0 {
-                        ContentUnavailableView("No Arrivals", systemImage: "pc")
+                    if arrivals.isEmpty {
+                        ContentUnavailableView("No Arrivals", systemImage: "bus")
                     } else {
                         List {
                             Section {
@@ -62,10 +62,10 @@ struct StopView: View {
                         // Animates poll diffs; the load-state animation is below.
                         .animation(reduceMotion ? nil : .spring(.bouncy), value: arrivals)
                     }
-
                 }
             case .failure(let error):
-                ContentUnavailableView("Error", systemImage: "pc", description: Text(error.localizedDescription))}
+                ContentUnavailableView("Error", systemImage: "exclamationmark.triangle", description: Text(error.localizedDescription))
+            }
         }
         // .smooth, not .bouncy: overshoot reads as a scroll and flashes the nav bar hairline.
         .animation(reduceMotion ? nil : .smooth, value: arrivalsStore.state)
@@ -94,7 +94,6 @@ struct StopView: View {
                                      argument: String(localized: "Refresh failed: \(new)"))
             }
         }
-
     }
 
     private var fetch: @Sendable () async throws -> [Foli.Arrival] {
@@ -119,7 +118,7 @@ struct StopView: View {
             .accessibilityAction(named: "Track Bus") { model.selectVehicle(trip) }
             .contextMenu {
                 Button("Track Bus", systemImage: "bus") { model.selectVehicle(trip) }
-                // "Notify Me" goes here once stop alerts reach arrival rows.
+                // TODO: "Notify Me" once stop alerts reach arrival rows.
             }
         } else {
             let start = Date(timeIntervalSince1970: arrival.originAimedDepartureTime)
@@ -166,11 +165,9 @@ struct StopView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            spokenArrival(
-                line: arrival.lineRef,
-                destination: arrival.destinationDisplay,
-                departure: arrival.expectedDepartureDate
-            ))
+            String(localized: "Line \(arrival.lineRef) to \(arrival.destinationDisplay)")
+                + ", " + ETADisplay(arrival: arrival.expectedDepartureDate, now: .now).spoken
+        )
     }
 
     private var chevron: some View {
@@ -180,15 +177,10 @@ struct StopView: View {
             .accessibilityHidden(true)
     }
 
-    /// Matches `lineRef` to `route.shortName`; nil falls back to plain text.
-    private func route(for arrival: Foli.Arrival) -> Foli.Route? {
-        guard let routes = model.routes.state.value else { return nil }
-        return routes.first { $0.shortName == arrival.lineRef }
-    }
-
+    /// Plain text when the line has no route.
     @ViewBuilder
     private func lineBadge(for arrival: Foli.Arrival) -> some View {
-        if let route = route(for: arrival) {
+        if let route = model.route(forLine: arrival.lineRef) {
             RouteBadge(route: route)
         } else {
             Text(arrival.lineRef).monospaced()
@@ -197,8 +189,8 @@ struct StopView: View {
 
     /// Re-renders so the countdown ticks between polls.
     private func countdown(for arrival: Foli.Arrival) -> some View {
-        TimelineView(.periodic(from: .now, by: 15)) { _ in
-            Text(arrival.expectedDepartureDate.formattedInterval(to: .now))
+        TimelineView(.periodic(from: .now, by: 15)) { context in
+            ETADisplay(arrival: arrival.expectedDepartureDate, now: context.date).text
                 .font(.footnote)
                 .monospacedDigit()
         }
@@ -229,18 +221,4 @@ struct StopView: View {
             .foregroundStyle(.secondary)
             .textCase(nil)
     }
-}
-
-/// Screen reader label for an arrival row. Clock time past an hour, "departing now" under a minute.
-func spokenArrival(line: String, destination: String, departure: Date) -> String {
-    let head = String(localized: "Line \(line) to \(destination)")
-    let interval = departure.timeIntervalSince(.now)
-    let minutes = Int((interval / 60).rounded())
-    if minutes >= 60 {
-        return String(localized: "\(head), departing at \(departure.formatted(date: .omitted, time: .shortened))")
-    }
-    if interval > 0, minutes == 0 {
-        return String(localized: "\(head), departing now")
-    }
-    return "\(head), \(departure.formatted(.relative(presentation: .named)))"
 }

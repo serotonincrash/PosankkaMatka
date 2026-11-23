@@ -19,7 +19,7 @@ struct HomeSheetList: View {
     let routes: [Foli.Route]
     let nearbyStops: [StopWithDistance]
     let isLocationAuthorized: Bool
-    @Binding var searchFilter: SortState
+    @Binding var searchFilter: DistanceFilter
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
 
@@ -47,13 +47,9 @@ struct HomeSheetList: View {
                                         StopRow(stopWithDistance: stopWithDistance)
                                     }
                                     .tint(.primary)
-                                    // VoiceOver reads the full phrase; Voice Control gets the short forms.
                                     .accessibilityLabel(stopWithDistance.spokenDescription)
                                     .accessibilityHint("Opens live arrivals for this stop")
-                                    .accessibilityInputLabels([
-                                        "\(stopWithDistance.stop.id) \(stopWithDistance.stop.name)",
-                                        stopWithDistance.stop.name
-                                    ])
+                                    .stopInputLabels(stopID: stopWithDistance.stop.id, name: stopWithDistance.stop.name)
                                 }
                                 if showsNearbyDisclosure {
                                     Button("Show all \(stopRows.count) stops") {
@@ -106,13 +102,13 @@ struct HomeSheetList: View {
                         Section("Show stops within") {
                             Picker("Distance", selection: $searchFilter) {
                                 Label("Any distance", systemImage: "infinity")
-                                    .tag(SortState.none)
+                                    .tag(DistanceFilter.none)
                                 Label("500 m", systemImage: "location")
-                                    .tag(SortState.proximity(500))
+                                    .tag(DistanceFilter.proximity(500))
                                 Label("1 km", systemImage: "location")
-                                    .tag(SortState.proximity(1000))
+                                    .tag(DistanceFilter.proximity(1000))
                                 Label("2 km", systemImage: "location")
-                                    .tag(SortState.proximity(2000))
+                                    .tag(DistanceFilter.proximity(2000))
                             }
                             .pickerStyle(.inline)
                         }
@@ -233,7 +229,7 @@ struct HomeSheetList: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         icon
-                        code
+                        StopCode(id: stopWithDistance.stop.id)
                     }
                     Text(stopWithDistance.stop.name)
                     distance
@@ -241,19 +237,12 @@ struct HomeSheetList: View {
             } else {
                 HStack {
                     icon
-                    code
+                    StopCode(id: stopWithDistance.stop.id)
                     Text(stopWithDistance.stop.name)
                     Spacer()
                     distance
                 }
             }
-        }
-
-        private var code: some View {
-            Text(stopWithDistance.stop.id)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .monospaced()
         }
 
         private var icon: some View {

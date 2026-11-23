@@ -33,6 +33,7 @@ final class AppModel {
     private var tripDirections: [String: RouteDirection] = [:]
     @ObservationIgnored private var tripLoads: Set<String> = []
     @ObservationIgnored private var stopIndex: (count: Int, byID: [Foli.Stop.ID: Foli.Stop]) = (0, [:])
+    @ObservationIgnored private var routeIndex: (count: Int, byLine: [String: Foli.Route]) = (0, [:])
 
     init(client: FoliClient) {
         self.client = client
@@ -56,12 +57,21 @@ final class AppModel {
     }
 
     func stop(withID id: Foli.Stop.ID) -> Foli.Stop? {
-        allStops.first { $0.id == id }
+        stopsByID[id]
     }
 
-    /// SIRI `lineRef` is the route's short name, not its id.
     func route(forLine lineRef: String) -> Foli.Route? {
-        routes.state.value?.first { $0.shortName == lineRef }
+        routesByLine[lineRef]
+    }
+
+    /// Routes by SIRI `lineRef`, which is the short name, not the route id.
+    /// Rebuilt only when the route list changes size; read per map tick.
+    var routesByLine: [String: Foli.Route] {
+        let routes = routes.state.value ?? []
+        if routeIndex.count != routes.count {
+            routeIndex = (routes.count, Dictionary(routes.map { ($0.shortName, $0) }, uniquingKeysWith: { a, _ in a }))
+        }
+        return routeIndex.byLine
     }
 
     /// Rebuilt only when the stop list changes size; journeys look stops up per frame.

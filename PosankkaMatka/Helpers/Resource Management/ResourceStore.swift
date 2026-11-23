@@ -21,6 +21,7 @@ final class ResourceStore<T> {
     private(set) var lastUpdated: Date?
     /// Cleared on success.
     private(set) var lastError: Foli.APIError?
+    private(set) var isRefreshing = false
 
     /// Fetches only if not yet loaded (`.task` re-runs on appear).
     func load(_ fetch: @escaping Fetch) async {
@@ -34,8 +35,6 @@ final class ResourceStore<T> {
     func refresh(_ fetch: @escaping Fetch) async {
         await run(fetch)
     }
-
-    private(set) var isRefreshing = false
 
     private func run(_ fetch: @escaping Fetch) async {
         isRefreshing = true

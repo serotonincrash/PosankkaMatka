@@ -33,10 +33,6 @@ final class StopAlertManager {
 
     private(set) var active: ActiveAlert?
 
-    var isLocationDenied: Bool {
-        [.denied, .restricted].contains(authorization.authorizationStatus)
-    }
-
     private static let pollInterval: Duration = .seconds(30)
     /// A fix older than this says nothing about where the rider is now.
     private static let fixMaxAge: TimeInterval = 120
@@ -51,7 +47,6 @@ final class StopAlertManager {
     private static let defaultsKey = "StopAlertManager.active"
 
     @ObservationIgnored private let client: FoliClient
-    @ObservationIgnored private let authorization = CLLocationManager()
     @ObservationIgnored private let notificationPresenter = NotificationPresenter()
     @ObservationIgnored private var feed: LocationFeed?
     @ObservationIgnored private var serviceSession: CLServiceSession?
@@ -72,8 +67,7 @@ final class StopAlertManager {
 
     func isAlerting(stopID: String, trip: TripKey) -> Bool {
         guard let attributes = active?.attributes else { return false }
-        return attributes.stopID == stopID && attributes.vehicleRef == trip.vehicleRef
-            && attributes.originAimedDepartureTime == trip.originAimedDepartureTime
+        return attributes.stopID == stopID && attributes.trip == trip
     }
 
     // MARK: - Lifecycle
@@ -216,27 +210,36 @@ final class StopAlertManager {
         let line = alert.attributes.lineName
         let stop = alert.attributes.stopName
         let minutes = max(0, Int((alert.state.eta.timeIntervalSinceNow / 60).rounded()))
-        let content = UNMutableNotificationContent()
+        let title: String
+        let body: String
         switch kind {
         case .leaveNow:
-            content.title = String(localized: "Leave now for \(stop)")
+            title = String(localized: "Leave now for \(stop)")
             if let walk = alert.state.walkingMinutes {
-                content.body = String(localized: "Bus \(line) arrives in \(minutes) min; it's about a \(walk) min walk.")
+                body = String(localized: "Bus \(line) arrives in \(minutes) min; it's about a \(walk) min walk.")
             } else {
-                content.body = String(localized: "Bus \(line) arrives in \(minutes) min.")
+                body = String(localized: "Bus \(line) arrives in \(minutes) min.")
             }
         case .busArriving:
-            content.title = String(localized: "Bus \(line) is arriving")
-            content.body = String(localized: "At \(stop) in about \(minutes) min.")
+            title = String(localized: "Bus \(line) is arriving")
+            body = String(localized: "At \(stop) in about \(minutes) min.")
         case .stopIsNext:
-            content.title = String(localized: "Your stop is next")
-            content.body = String(localized: "\(stop) is coming up on bus \(line).")
+            title = String(localized: "Your stop is next")
+            body = String(localized: "\(stop) is coming up on bus \(line).")
         }
+        return await post(id: "stopAlert.\(kind.rawValue)", title: title, body: body)
+    }
+
+    @discardableResult
+    private func post(id: String, title: String, body: String) async -> UNNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
         content.sound = .default
         // Needs the Time Sensitive Notifications capability; otherwise plain.
         content.interruptionLevel = .timeSensitive
         try? await UNUserNotificationCenter.current().add(
-            UNNotificationRequest(identifier: "stopAlert.\(kind.rawValue)", content: content, trigger: nil)
+            UNNotificationRequest(identifier: id, content: content, trigger: nil)
         )
         return content
     }
@@ -272,13 +275,10 @@ final class StopAlertManager {
         alert.sent.insert(.stopIsNext)
         active = alert
         persist()
-        let content = UNMutableNotificationContent()
-        content.title = String(localized: "Approaching \(alert.attributes.stopName)")
-        content.body = String(localized: "You're near your stop for bus \(alert.attributes.lineName).")
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive
-        try? await UNUserNotificationCenter.current().add(
-            UNNotificationRequest(identifier: "stopAlert.geofence", content: content, trigger: nil)
+        await post(
+            id: "stopAlert.geofence",
+            title: String(localized: "Approaching \(alert.attributes.stopName)"),
+            body: String(localized: "You're near your stop for bus \(alert.attributes.lineName).")
         )
     }
 
@@ -323,7 +323,11 @@ final class StopAlertManager {
         }
         lastPushed = (state, now)
         let alert = notice.map {
-            AlertConfiguration(title: "\($0.title)", body: "\($0.body)", sound: .default)
+            AlertConfiguration(
+                title: LocalizedStringResource(stringLiteral: $0.title),
+                body: LocalizedStringResource(stringLiteral: $0.body),
+                sound: .default
+            )
         }
         for activity in Activity<StopAlertAttributes>.activities {
             await activity.update(ActivityContent(state: state, staleDate: state.staleDate), alertConfiguration: alert)

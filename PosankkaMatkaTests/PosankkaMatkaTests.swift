@@ -7,38 +7,22 @@
 
 import Testing
 import Foundation
+import PosankkaCore
 @testable import PosankkaMatka
 
 struct PosankkaMatkaTests {
 
-    @Test func formattedIntervalBuckets() {
+    @Test func spokenETABuckets() {
         let now = Date.now
-        #expect(now.addingTimeInterval(10).formattedInterval(to: now) == "Now")
-        #expect(now.addingTimeInterval(300).formattedInterval(to: now) == "5 min")
-        #expect(now.addingTimeInterval(-300).formattedInterval(to: now) == "-5 min ago")
-        // Whole hours render as clock time — the minute modulo must not wrap
-        // them into "Now".
-        var components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: now)
-        components.hour = 9
-        components.minute = 30
-        let departure = Calendar.current.date(from: components)!
-        #expect(departure.formattedInterval(to: departure.addingTimeInterval(-2 * 3600)) == "09:30")
-    }
-
-    @Test func spokenArrivalBuckets() {
-        let now = Date.now
-        func arrival(_ offset: TimeInterval) -> String {
-            spokenArrival(line: "32", destination: "Kauppatori",
-                          departure: now.addingTimeInterval(offset))
+        func spoken(_ offset: TimeInterval) -> String {
+            ETADisplay(arrival: now.addingTimeInterval(offset), now: now).spoken
         }
-        #expect(arrival(10) == "Line 32 to Kauppatori, departing now")
-        #expect(arrival(300) == "Line 32 to Kauppatori, in 5 minutes")
-        #expect(arrival(60) == "Line 32 to Kauppatori, in 1 minute")
-        #expect(arrival(-300) == "Line 32 to Kauppatori, 5 minutes ago")
-        // Sub-minute past stays past-tense (never "in 0 minutes").
-        #expect(arrival(-10).hasSuffix("ago"))
-        // An hour or more out reads as clock time (exact clock is locale-set).
-        #expect(arrival(2 * 3600).hasPrefix("Line 32 to Kauppatori, departing at"))
+        #expect(spoken(10) == "arriving now")
+        // A just-departed bus may still be at the stop: never "ago".
+        #expect(spoken(-300) == "arriving now")
+        #expect(spoken(300) == "in 5 minutes")
+        // Past the relative window, clock time (exact clock is locale-set).
+        #expect(spoken(20 * 60).hasPrefix("at "))
     }
 
 }

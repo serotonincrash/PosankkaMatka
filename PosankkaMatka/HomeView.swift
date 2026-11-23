@@ -56,7 +56,7 @@ struct HomeView: View {
                     hidesViewportStops: model.selection.route != nil || vehicleOnTop,
                     journey: tracked.map(journeyOverlay),
                     vehicles: model.vehicles.displayVehicles(at: context.date),
-                    lineRoutes: lineRoutes,
+                    lineRoutes: model.routesByLine,
                     selectedVehicleRef: model.selection.vehicle?.vehicleRef
                 )
                 .ignoresSafeArea(edges: .bottom)
@@ -84,12 +84,20 @@ struct HomeView: View {
 
             VStack(spacing: 12) {
                 Group {
-                    MapLocateButton(isAuthorized: model.location.isAuthorized, action: recenterOnUser)
+                    // Custom because the native button centers the user behind the sheets.
+                    MapCircleButton(
+                        systemImage: "location.fill",
+                        tint: model.location.isAuthorized ? .accentColor : .secondary,
+                        action: recenterOnUser
+                    )
+                    .disabled(!model.location.isAuthorized)
+                    .accessibilityLabel("Show my location")
                     MapCompass(scope: mapScope)
                 }
                 .accessibilityHidden(true)
                 if model.selection.vehicle != nil {
-                    CenterOnBusButton(action: centerOnBus)
+                    MapCircleButton(systemImage: "location.viewfinder", action: centerOnBus)
+                        .accessibilityLabel("Center on Bus")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -118,12 +126,6 @@ struct HomeView: View {
 
     // MARK: - Map content
 
-    /// Routes by SIRI `lineRef` (the short name, not the route id).
-    private var lineRoutes: [String: Foli.Route] {
-        Dictionary((model.routes.state.value ?? []).map { ($0.shortName, $0) },
-                   uniquingKeysWith: { first, _ in first })
-    }
-
     private var isZoomedIn: Bool {
         guard let span = visibleRegion?.span.latitudeDelta else { return false }
         return span <= Self.markerThreshold
@@ -143,9 +145,6 @@ struct HomeView: View {
 
     // MARK: - Bus framing
 
-    /// Street-level distance (m) for a bus framed from further out.
-    private static let busDistance: Double = 2_500
-
     /// Frames the bus once when its card opens; the map doesn't follow it.
     private func vehicleCardChanged(to key: TripKey?) {
         guard key != nil else {
@@ -157,7 +156,7 @@ struct HomeView: View {
             sheetModel.suppressDetentReframe = true
             sheetModel.cardDetent = .medium
         }
-        busFraming.distance = min(liveCamera?.distance ?? Self.busDistance, Self.busDistance)
+        busFraming.distance = min(liveCamera?.distance ?? BusFraming.streetDistance, BusFraming.streetDistance)
         busFraming.needsFraming = true
         busTick(model.journey(at: .now)?.position.coordinate.toCLCoordinate())
     }
@@ -174,7 +173,7 @@ struct HomeView: View {
     }
 
     private func centerOnBus() {
-        busFraming.distance = liveCamera?.distance ?? Self.busDistance
+        busFraming.distance = liveCamera?.distance ?? BusFraming.streetDistance
         busFraming.needsFraming = true
         busTick(busFraming.lastCoordinate)
     }
@@ -411,16 +410,17 @@ struct HomeView: View {
     }
 }
 
-/// Custom because the native button centers the user behind the sheets.
-private struct MapLocateButton: View {
-    let isAuthorized: Bool
+/// A round map overlay button, glass on iOS 26.
+private struct MapCircleButton: View {
+    let systemImage: String
+    var tint: Color = .primary
     let action: () -> Void
     @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
 
     private var label: some View {
-        Image(systemName: "location.fill")
+        Image(systemName: systemImage)
             .font(.body.weight(.semibold))
-            .foregroundStyle(isAuthorized ? Color.accentColor : Color.secondary)
+            .foregroundStyle(tint)
             .frame(width: buttonSize, height: buttonSize)
     }
 
@@ -435,43 +435,17 @@ private struct MapLocateButton: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(!isAuthorized)
-        .accessibilityLabel("Show my location")
     }
 }
 
 private final class BusFraming {
+    /// Street-level distance (m) for a bus framed from further out.
+    static let streetDistance: Double = 2_500
+
     var lastCoordinate: CLLocationCoordinate2D?
-    var distance: Double = 2_500
+    var distance = streetDistance
     /// The next tick with a position frames the bus.
     var needsFraming = false
-}
-
-/// Re-centers the map on the vehicle card's bus.
-private struct CenterOnBusButton: View {
-    let action: () -> Void
-    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 44
-
-    private var label: some View {
-        Image(systemName: "location.viewfinder")
-            .font(.body.weight(.semibold))
-            .foregroundStyle(Color.primary)
-            .frame(width: buttonSize, height: buttonSize)
-    }
-
-    var body: some View {
-        Button(action: action) {
-            if #available(iOS 26.0, *) {
-                label.glassEffect(.regular.interactive(), in: Circle())
-            } else {
-                label
-                    .background(Circle().fill(.background))
-                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Center on Bus")
-    }
 }
 
 private extension MKCoordinateRegion {

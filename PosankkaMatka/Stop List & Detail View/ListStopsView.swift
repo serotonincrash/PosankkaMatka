@@ -12,13 +12,13 @@ import PosankkaCore
 
 /// The home-sheet list with search and the distance filter.
 struct ListStopsView: View {
-    @State var search = ""
+    @State private var search = ""
     @Environment(AppModel.self) private var model
     @State private var nearbyStops: [StopWithDistance] = []
 
     /// Read from observable state, not `CLLocationManager` in `body`.
     private var isLocationAuthorized: Bool { model.location.isAuthorized }
-    @Forever("nearbySearchFilter") var searchFilter: SortState = .proximity(2000)
+    @Forever("nearbySearchFilter") var searchFilter: DistanceFilter = .proximity(2000)
 
     @Binding var selectedStopID: Foli.Stop.ID?
     @Binding var selectedRoute: Foli.Route?
@@ -54,7 +54,7 @@ struct ListStopsView: View {
     private func nearbyRows(for stops: [Foli.Stop]) -> [StopWithDistance] {
         guard isLocationAuthorized, let coordinate = model.location.currentLocation else { return [] }
         let origin = Foli.Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        let maxDistance: Double? = if case .proximity(let meters) = searchFilter, meters > 0 {
+        let maxDistance: Double? = if case .proximity(let meters) = searchFilter {
             meters
         } else {
             nil

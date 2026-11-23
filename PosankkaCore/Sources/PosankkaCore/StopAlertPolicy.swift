@@ -52,7 +52,6 @@ public enum StopAlertPolicy {
         public var end: EndReason?
     }
 
-    // Tuning, in one place.
     /// Streets aren't straight lines.
     public static let detourFactor = 1.3
     /// m/s, an unhurried walk.

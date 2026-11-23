@@ -77,7 +77,7 @@ struct MapView: View {
             if isZoomedIn {
                 ForEach(direction.stops) { stop in
                     if let coordinate = stop.location?.toCLCoordinate() {
-                        Marker(stop.name, systemImage: markerSystemImage(for: stop), coordinate: coordinate)
+                        Marker(stop.name, systemImage: markerSystemImage(for: stop.id), coordinate: coordinate)
                             .tint(routeColor)
                             .tag(MapItem.stop(stop.id))
                     }
@@ -114,7 +114,7 @@ struct MapView: View {
                 if let coordinate = stop.location?.toCLCoordinate() {
                     // System Marker for MapKit's label decluttering.
                     // TODO: model Föli's real stop signage instead of bus/boat glyphs.
-                    Marker(stop.name, systemImage: markerSystemImage(for: stop), coordinate: coordinate)
+                    Marker(stop.name, systemImage: markerSystemImage(for: stop.id), coordinate: coordinate)
                         .tint(boatStopIDs.contains(stop.id) ? .blue : .red)
                         .tag(MapItem.stop(stop.id))
                 }
@@ -159,8 +159,7 @@ struct MapView: View {
                     }
                     .annotationTitles(.hidden)
                 } else if isZoomedIn {
-                    Marker(call.name, systemImage: boatStopIDs.contains(call.stopID) ? "ferry.fill" : "bus.fill",
-                           coordinate: coordinate)
+                    Marker(call.name, systemImage: markerSystemImage(for: call.stopID), coordinate: coordinate)
                         .tint(journey.color)
                         .tag(MapItem.stop(call.stopID))
                 } else {
@@ -175,8 +174,8 @@ struct MapView: View {
 
     private static let travelledColor = Color.gray.opacity(0.6)
 
-    private func markerSystemImage(for stop: Foli.Stop) -> String {
-        boatStopIDs.contains(stop.id) ? "ferry.fill" : "bus.fill"
+    private func markerSystemImage(for stopID: Foli.Stop.ID) -> String {
+        boatStopIDs.contains(stopID) ? "ferry.fill" : "bus.fill"
     }
 
     private func routeEndpointPin(systemImage: String, color: Color? = nil) -> some View {

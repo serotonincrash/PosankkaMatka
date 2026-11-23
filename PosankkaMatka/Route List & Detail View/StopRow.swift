@@ -15,19 +15,24 @@ struct StopRowLabel: View {
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 4) {
-                code
+                StopCode(id: stopID)
                 Text(name)
             }
         } else {
             HStack {
-                code
+                StopCode(id: stopID)
                 Text(name)
             }
         }
     }
+}
 
-    private var code: some View {
-        Text(stopID)
+/// A stop's code, secondary and monospaced.
+struct StopCode: View {
+    let id: String
+
+    var body: some View {
+        Text(id)
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .monospaced()

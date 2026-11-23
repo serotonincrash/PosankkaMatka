@@ -112,9 +112,7 @@ private struct VehicleCardContent: View {
             return
         }
         AccessibilityNotification.Announcement(endingText).post()
-        if let attributes = model.stopAlert.active?.attributes,
-           attributes.vehicleRef == key.vehicleRef,
-           attributes.originAimedDepartureTime == key.originAimedDepartureTime {
+        if model.stopAlert.active?.attributes.trip == key {
             Task { await model.stopAlert.cancel() }
         }
     }
@@ -187,7 +185,7 @@ private struct VehicleCardContent: View {
                         .accessibilityHidden(true)
                 }
                 if isAhead, let eta = call.estimatedArrival(delay: journey.delay) {
-                    etaText(ETADisplay(arrival: eta, now: now))
+                    ETADisplay(arrival: eta, now: now).text
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(call.state == .upcoming ? .secondary : .primary)
                 }
@@ -216,21 +214,12 @@ private struct VehicleCardContent: View {
         }
     }
 
-    @ViewBuilder
-    private func etaText(_ display: ETADisplay) -> some View {
-        switch display {
-        case .now: Text("Now")
-        case .minutes(let minutes): Text("\(minutes) min")
-        case .clock(let date): Text(date, format: .dateTime.hour().minute())
-        }
-    }
-
     private func spokenRow(_ call: VehicleJourney.Call, journey: VehicleJourney, isAlerting: Bool) -> String {
         var parts = [String(localized: "Stop ID \(call.stopID), \(call.name)")]
         if call.state == .passed || ending != nil {
             parts.append(String(localized: "Passed"))
         } else if let eta = call.estimatedArrival(delay: journey.delay) {
-            let time = spokenETA(ETADisplay(arrival: eta, now: now))
+            let time = ETADisplay(arrival: eta, now: now).spoken
             if case .current = call.state {
                 parts.append(String(localized: "Next stop, \(time)"))
             } else {
@@ -242,14 +231,6 @@ private struct VehicleCardContent: View {
             if let distance = alertDistanceText { parts.append(distance) }
         }
         return parts.joined(separator: ", ")
-    }
-
-    private func spokenETA(_ display: ETADisplay) -> String {
-        switch display {
-        case .now: String(localized: "arriving now")
-        case .minutes(let minutes): String(localized: "in \(minutes) minutes")
-        case .clock(let date): String(localized: "at \(date.formatted(date: .omitted, time: .shortened))")
-        }
     }
 
     // MARK: - Title
@@ -317,8 +298,8 @@ private struct VehicleCardContent: View {
     @ViewBuilder
     private var alertFooter: some View {
         let alert = model.stopAlert
-        if let active = alert.active, active.attributes.vehicleRef == key.vehicleRef {
-            if alert.isLocationDenied {
+        if let active = alert.active, active.attributes.trip == key {
+            if !model.location.isAuthorized {
                 Text("Location access is off, so the alert can't tell how far you are from \(active.attributes.stopName). Turn it on in Settings.")
             } else {
                 Text("Tracking until the bus reaches \(active.attributes.stopName), using your location to tell you when to leave or get off. Ends after an hour.")
@@ -340,9 +321,9 @@ private struct VehicleCardContent: View {
 
     /// The alerting stop's estimate; changes per poll, not per frame.
     private func alertEstimate(in journey: VehicleJourney?) -> AlertEstimate? {
-        guard let journey, let stopID = model.stopAlert.active?.attributes.stopID,
-              model.stopAlert.isAlerting(stopID: stopID, trip: journey.trip),
-              let call = journey.calls.first(where: { $0.stopID == stopID && $0.state != .passed }),
+        guard let journey, let attributes = model.stopAlert.active?.attributes,
+              attributes.trip == journey.trip,
+              let call = journey.calls.first(where: { $0.stopID == attributes.stopID && $0.state != .passed }),
               let eta = call.estimatedArrival(delay: journey.delay) else { return nil }
         let next = journey.nextStopIndex.map { journey.calls[$0].name }
         return AlertEstimate(eta: eta, nextStopName: next)
